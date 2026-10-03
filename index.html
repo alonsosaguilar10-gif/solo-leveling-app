@@ -3,1009 +3,534 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>The System - Status & Quests</title>
-  <!-- Soporte PWA -->
+  <title>The System - Action RPG</title>
   <link rel="manifest" href="manifest.json" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="The System" />
-  <link rel="apple-touch-icon" href="icon-192.png" />
-
-  <!-- Tailwind CSS & Three.js -->
+  
+  <!-- FUENTE FUTURISTA DE GOOGLE FONTS -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  
   <style>
-    .system-border {
-      border: 1px solid #00f0ff;
-      box-shadow: 0 0 15px rgba(0, 240, 255, 0.25), inset 0 0 15px rgba(0, 240, 255, 0.1);
-    }
-    .neon-text {
-      text-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
-    }
-    .gold-neon-text {
-      text-shadow: 0 0 10px rgba(250, 204, 21, 0.7);
-    }
-    .red-neon-text {
-      text-shadow: 0 0 12px rgba(239, 68, 68, 0.8);
-    }
-    @keyframes popIn {
-      0% { transform: scale(0.7); opacity: 0; }
-      100% { transform: scale(1); opacity: 1; }
-    }
-    .modal-animate {
-      animation: popIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-    }
-    @keyframes penaltyPulse {
-      0%, 100% { border-color: rgba(239, 68, 68, 0.9); }
-      50% { border-color: rgba(185, 28, 28, 0.3); }
-    }
-    .animate-penalty-pulse {
-      animation: penaltyPulse 1.2s infinite ease-in-out;
-    }
-    canvas {
-      outline: none;
-      touch-action: none;
-    }
+    body { font-family: 'Rajdhani', sans-serif; background-color: #050810; }
+    .system-border { border: 1px solid rgba(0, 240, 255, 0.4); box-shadow: 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 20px rgba(0, 240, 255, 0.05); }
+    .system-panel { background: rgba(10, 15, 26, 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+    
+    .neon-text { text-shadow: 0 0 10px rgba(0, 240, 255, 0.7), 0 0 20px rgba(0, 240, 255, 0.4); }
+    .purple-neon-text { text-shadow: 0 0 12px rgba(168, 85, 247, 0.9); }
+    .gold-neon-text { text-shadow: 0 0 12px rgba(250, 204, 21, 0.8); }
+    .red-neon-text { text-shadow: 0 0 15px rgba(239, 68, 68, 0.9); }
+    
+    @keyframes popIn { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    .modal-animate { animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+    
+    /* Animaciones para la Caja de Botín */
+    @keyframes shake { 0%, 100% {transform: translateX(0) rotate(0deg);} 25% {transform: translateX(-6px) rotate(-8deg);} 75% {transform: translateX(6px) rotate(8deg);} }
+    .animate-shake { animation: shake 0.15s infinite; }
+    @keyframes flashWhite { 0% { background: rgba(255,255,255,1); opacity: 1; } 100% { background: rgba(255,255,255,0); opacity: 0; } }
+    .flash-overlay { position: absolute; inset: 0; pointer-events: none; animation: flashWhite 0.8s ease-out forwards; z-index: 60; }
+    
+    canvas { outline: none; touch-action: none; }
+    .dpad-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(168,85,247,0.4); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; border-radius: 8px; user-select: none; }
+    .dpad-btn:active { background: rgba(168,85,247,0.6); box-shadow: 0 0 15px rgba(168,85,247,0.5); }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { background: rgba(0, 240, 255, 0.5); border-radius: 4px; }
   </style>
 </head>
-<body class="bg-slate-950 text-cyan-300 min-h-screen flex items-center justify-center p-3 lg:p-6 font-mono select-none relative">
+<body class="text-cyan-300 min-h-screen flex items-center justify-center p-3 lg:p-6 select-none overflow-x-hidden relative">
+
+  <!-- MODAL DE ALERTA DEL SISTEMA (REEMPLAZA AL alert() NATIVO) -->
+  <div id="sys-alert-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] hidden flex items-center justify-center p-4 transition-opacity">
+    <div id="sys-alert-box" class="w-full max-w-sm bg-[#0a0f1a] border-2 p-6 rounded-lg text-center modal-animate relative shadow-[0_0_30px_rgba(0,0,0,0.8)]">
+      <h3 id="sys-alert-title" class="text-xl font-bold mb-2 uppercase tracking-widest">Aviso</h3>
+      <p id="sys-alert-msg" class="text-slate-300 text-sm mb-6 whitespace-pre-wrap font-medium leading-relaxed"></p>
+      <button id="sys-alert-btn" onclick="closeSysAlert()" class="w-full py-2.5 font-bold uppercase rounded transition-all active:scale-95 tracking-widest border">Aceptar</button>
+    </div>
+  </div>
 
   <!-- MODAL DE LEVEL UP -->
-  <div id="levelup-modal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="w-full max-w-sm bg-slate-900 border-2 border-yellow-400 p-6 rounded-lg shadow-[0_0_30px_rgba(250,204,21,0.4)] text-center modal-animate relative">
-      <p class="text-xs uppercase tracking-widest text-yellow-400/80 mb-1">[NOTIFICACIÓN DEL SISTEMA]</p>
-      <h3 class="text-3xl font-extrabold text-yellow-400 gold-neon-text mb-2">¡HAS SUBIDO DE NIVEL!</h3>
-      <p class="text-cyan-200 text-sm mb-4">
-        Felicidades, Cazador. Ahora eres <span id="modal-level-text" class="text-white font-bold text-lg">Nivel 2</span>.
-      </p>
-      <div class="bg-slate-950/80 p-3 rounded border border-yellow-500/30 text-xs text-left mb-5 space-y-1">
-        <p class="text-emerald-400 font-semibold">+ 5 Puntos de Atributo disponibles</p>
-        <p id="modal-gear-unlock" class="text-yellow-300 font-semibold hidden">¡NUEVO EQUIPAMIENTO DESBLOQUEADO!</p>
-        <p class="text-cyan-400">Tus capacidades continúan evolucionando.</p>
+  <div id="levelup-modal" class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="w-full max-w-sm bg-[#0a0f1a] border-2 border-yellow-400 p-6 rounded-lg text-center modal-animate shadow-[0_0_40px_rgba(250,204,21,0.3)]">
+      <p class="text-[10px] uppercase tracking-widest text-yellow-400/80 mb-1">[ RECOMPENSA DEL SISTEMA ]</p>
+      <h3 class="text-4xl font-extrabold text-yellow-400 gold-neon-text mb-2">LEVEL UP!</h3>
+      <p class="text-cyan-100 text-base mb-5">Has alcanzado el <span id="modal-level-text" class="text-white font-bold text-xl"></span>.</p>
+      <div class="bg-black/40 p-3 rounded border border-yellow-500/30 text-sm text-left mb-5 space-y-1">
+        <p class="text-emerald-400 font-bold">+ 5 Puntos de Atributo</p>
+        <p class="text-emerald-400 font-bold">+ 1 Caja Misteriosa</p>
       </div>
-      <button onclick="closeLevelUpModal()" class="w-full py-2 bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-bold uppercase tracking-wider rounded transition-all active:scale-95 shadow-[0_0_10px_rgba(250,204,21,0.5)]">
-        Aceptar Recompensa
-      </button>
+      <button onclick="closeLevelUpModal()" class="w-full py-3 bg-yellow-500 hover:bg-yellow-400 text-black font-extrabold uppercase tracking-widest rounded transition-all active:scale-95 shadow-[0_0_15px_rgba(250,204,21,0.4)]">Aceptar Recompensa</button>
     </div>
   </div>
 
-  <!-- MODAL DE APERTURA DE CAJA DE BOTÍN (LOOT BOX) -->
-  <div id="lootbox-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
-    <div class="w-full max-w-sm bg-slate-900 border-2 border-cyan-400 p-6 rounded-lg shadow-[0_0_35px_rgba(0,240,255,0.4)] text-center modal-animate relative">
-      <p class="text-xs uppercase tracking-widest text-cyan-400/80 mb-1">[RECOMPENSA DEL SISTEMA]</p>
-      <h3 class="text-2xl font-extrabold text-cyan-100 neon-text mb-3">CAJA MISTERIOSA</h3>
+  <!-- MODAL DE CAJA DE BOTÍN (ANIMADO) -->
+  <div id="lootbox-modal" class="fixed inset-0 bg-black/90 backdrop-blur-lg z-50 hidden flex items-center justify-center p-4">
+    <div id="lootbox-flash" class="hidden"></div>
+    <div class="w-full max-w-sm bg-[#0a0f1a] border-2 border-cyan-500 p-6 rounded-lg text-center modal-animate shadow-[0_0_40px_rgba(0,240,255,0.2)] z-50">
+      <h3 class="text-2xl font-extrabold text-cyan-100 neon-text mb-4 tracking-wider" id="loot-title-ui">INVENTARIO</h3>
+      <div class="h-32 flex flex-col items-center justify-center bg-black/50 border border-cyan-900/50 rounded-lg mb-4">
+        <div id="loot-icon" class="text-6xl drop-shadow-[0_0_15px_rgba(255,255,255,0.5)] transition-transform">🎁</div>
+      </div>
+      <p id="loot-desc" class="text-sm text-cyan-300 font-medium mb-5">Tienes una Caja Misteriosa lista para abrir.</p>
+      <div id="loot-action-container"></div>
+    </div>
+  </div>
+
+  <!-- MODAL DE CASTIGO -->
+  <div id="penalty-modal" class="fixed inset-0 bg-black/95 backdrop-blur-lg z-50 hidden flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-[#0a0f1a] border-2 border-red-600 p-6 rounded-lg text-center modal-animate shadow-[0_0_50px_rgba(239,68,68,0.4)]">
+      <h3 class="text-4xl font-extrabold text-red-500 red-neon-text mb-2">CASTIGO</h3>
+      <p class="text-[11px] text-red-300 mb-5 uppercase tracking-widest">[ Evaluación Fallida ]</p>
+      <div class="bg-red-950/40 p-4 rounded border border-red-900 text-sm text-left mb-6">
+        <p class="font-bold text-red-400 mb-2">Objetivo: Sobrevivir a la Penalización</p>
+        <p class="text-red-200">No completaste tu entrenamiento diario. Tu racha se ha reducido a cenizas.</p>
+        <div class="p-3 bg-black/60 rounded border border-red-800 text-amber-400 font-bold text-xs mt-3 text-center">Penalización: 100 Sentadillas / 20 Min. Cardio</div>
+      </div>
+      <button onclick="acceptPenalty()" class="w-full py-3 bg-red-700 hover:bg-red-600 text-white font-extrabold uppercase tracking-widest rounded transition-all active:scale-95 shadow-[0_0_20px_rgba(239,68,68,0.5)]">Entrar a la Zona</button>
+    </div>
+  </div>
+
+  <!-- MODAL DE MAZMORRA (ACTION RPG) -->
+  <div id="dungeon-modal" class="fixed inset-0 bg-black/95 backdrop-blur-lg z-50 hidden flex items-center justify-center p-2 lg:p-4">
+    <div class="w-full max-w-2xl bg-[#0a0f1a] p-3 lg:p-5 rounded-lg modal-animate border-2 border-purple-600 shadow-[0_0_40px_rgba(168,85,247,0.3)] flex flex-col">
+      <div class="text-center mb-2"><h3 class="text-2xl font-extrabold text-purple-400 purple-neon-text tracking-widest">SALA DEL JEFE</h3></div>
       
-      <div class="my-4 p-4 bg-slate-950/90 rounded border border-cyan-800/60 flex flex-col items-center">
-        <div id="loot-icon" class="text-5xl mb-2 animate-bounce">🎁</div>
-        <p id="loot-title" class="text-base font-bold text-yellow-300">Caja de Suministros Diarios</p>
-        <p id="loot-desc" class="text-xs text-cyan-300/80 mt-1">Contiene recompensas aleatorias otorgadas por El Sistema.</p>
+      <div class="grid grid-cols-2 gap-3 mb-2 shrink-0">
+        <div class="bg-blue-950/40 border border-blue-800/60 p-2 rounded text-center">
+          <p class="text-[11px] uppercase tracking-widest text-blue-400 font-bold mb-1">Cazador (HP)</p>
+          <div class="w-full bg-black/80 h-2.5 rounded-full overflow-hidden border border-blue-900/50"><div id="dungeon-player-hp-bar" class="bg-gradient-to-r from-blue-700 to-blue-400 h-full w-full transition-all duration-300"></div></div>
+        </div>
+        <div class="bg-red-950/40 border border-red-800/60 p-2 rounded text-center">
+          <p id="enemy-label" class="text-[11px] uppercase tracking-widest text-red-400 font-bold mb-1">Enemigos</p>
+          <div class="w-full bg-black/80 h-2.5 rounded-full overflow-hidden border border-red-900/50"><div id="dungeon-boss-hp-bar" class="bg-gradient-to-r from-red-700 to-red-500 h-full w-full transition-all duration-300"></div></div>
+        </div>
       </div>
 
-      <div id="loot-action-container">
-        <button onclick="openLootBox()" class="w-full py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold uppercase tracking-wider rounded transition-all active:scale-95 shadow-[0_0_15px_rgba(0,240,255,0.5)] text-xs">
-          Abrir Caja de Botín
-        </button>
+      <div class="w-full h-64 lg:h-[420px] bg-black border border-purple-800/80 rounded-lg mb-3 relative shadow-[inset_0_0_50px_rgba(168,85,247,0.25)] overflow-hidden">
+        <div id="combat-canvas-container" class="absolute inset-0"></div>
+        <div class="absolute inset-0 pointer-events-none flex flex-col justify-end p-3 lg:hidden">
+          <div class="flex justify-between items-end w-full">
+            <div class="grid grid-cols-3 grid-rows-3 gap-1.5 w-36 h-36 pointer-events-auto opacity-70">
+              <div></div><div class="dpad-btn text-xl" id="btn-up">↑</div><div></div>
+              <div class="dpad-btn text-xl" id="btn-left">←</div><div class="dpad-btn text-xl" id="btn-down">↓</div><div class="dpad-btn text-xl" id="btn-right">→</div>
+              <div></div><div></div><div></div>
+            </div>
+            <div class="pointer-events-auto opacity-90 mb-4 mr-2">
+              <div id="btn-action-attack" class="w-20 h-20 rounded-full bg-gradient-to-br from-red-500 to-red-800 border-2 border-red-400 flex items-center justify-center text-white font-bold text-3xl active:scale-90 touch-none shadow-[0_0_20px_rgba(239,68,68,0.8)]">⚔️</div>
+            </div>
+          </div>
+        </div>
+        <div class="absolute top-2 left-2 text-[11px] text-purple-200 bg-black/60 px-3 py-1.5 rounded border border-purple-900/50 hidden lg:block z-10 tracking-widest font-bold">WASD: Moverse | ESPACIO: Atacar</div>
       </div>
+
+      <div id="combat-log" class="bg-black/80 border border-purple-900/60 rounded p-2.5 text-xs text-slate-300 h-24 overflow-y-auto shrink-0 mb-3 font-semibold space-y-1.5 tracking-wide"></div>
+      <button onclick="fleeDungeon()" class="w-full py-3 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 font-bold uppercase tracking-widest rounded transition-all active:scale-95 text-sm shrink-0">Huir de la Mazmorra</button>
     </div>
   </div>
 
-  <!-- MODAL DE QUEST DE CASTIGO -->
-  <div id="penalty-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
-    <div class="w-full max-w-md bg-stone-950 border-2 border-red-500 p-6 rounded-lg shadow-[0_0_40px_rgba(239,68,68,0.6)] text-center modal-animate relative animate-penalty-pulse">
-      <div class="inline-block px-2.5 py-0.5 rounded bg-red-950 border border-red-500/60 text-[10px] uppercase tracking-widest text-red-400 font-bold mb-2">
-        ¡ADVERTENCIA DEL SISTEMA!
+  <!-- INTERFAZ PRINCIPAL DEL SISTEMA -->
+  <div class="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-5 relative z-10">
+    
+    <!-- PANEL 1: ESTADO -->
+    <div class="lg:col-span-4 system-panel rounded-xl system-border p-5 lg:p-6 flex flex-col justify-between">
+      <div class="border-b border-cyan-500/30 pb-3 mb-4 text-center">
+        <p class="text-[11px] uppercase tracking-widest text-cyan-400/70 font-semibold">Notificación del Sistema</p>
+        <h1 class="text-3xl font-extrabold text-cyan-100 neon-text tracking-wider mt-1">ESTADO</h1>
       </div>
-      <h3 class="text-3xl font-extrabold text-red-500 red-neon-text mb-2">MISIÓN DE CASTIGO</h3>
-      <p class="text-xs uppercase tracking-widest text-red-300/80 mb-4">[ZONA DE PENALIZACIÓN ACTIVADA]</p>
-      
-      <div class="bg-red-950/30 p-3.5 rounded border border-red-900/60 text-xs text-left mb-4 space-y-2 text-red-200">
-        <p class="font-bold text-red-400">Objetivo: Sobrevivir al castigo</p>
-        <p>No has cumplido con las misiones diarias obligatorias asignadas por El Sistema.</p>
-        <div class="p-2 bg-black/50 rounded border border-red-900 text-amber-300 font-semibold text-[11px]">
-          Penalización: 100 Sentadillas o 20 Minutos de Cardio intensivo.
-        </div>
-        <p class="text-[10px] text-red-400/80">Tu contador de racha se ha restablecido a 0.</p>
-      </div>
-
-      <button onclick="acceptPenalty()" class="w-full py-2 bg-red-600 hover:bg-red-500 text-white font-bold uppercase tracking-wider rounded transition-all active:scale-95 shadow-[0_0_15px_rgba(239,68,68,0.7)]">
-        Completar Castigo y Sobrevivir
-      </button>
-    </div>
-  </div>
-
-  <!-- Contenedor Principal (3 columnas) -->
-  <div class="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-5">
-
-    <!-- PANEL 1: VENTANA DE ESTADO -->
-    <div class="lg:col-span-4 bg-slate-900/90 rounded-lg system-border p-5 backdrop-blur-md flex flex-col justify-between">
-      <div>
-        <div class="border-b border-cyan-500/40 pb-2 mb-3 text-center">
-          <p class="text-[10px] uppercase tracking-widest text-cyan-400/70">Notificación del Sistema</p>
-          <h1 class="text-xl font-bold tracking-wider text-cyan-100 neon-text">ESTADO</h1>
-        </div>
-
-        <div class="grid grid-cols-2 gap-2 text-xs mb-3 bg-slate-950/60 p-2.5 rounded border border-cyan-900/50">
-          <div><span class="text-cyan-500">Cazador:</span> <span class="text-white font-semibold">Jesús</span></div>
-          <div><span class="text-cyan-500">Nivel:</span> <span id="player-level" class="text-white font-bold">1</span></div>
-          <div><span class="text-cyan-500">Rango:</span> <span id="player-rank" class="text-yellow-400 font-bold">E</span></div>
-          <div><span class="text-cyan-500">Racha:</span> <span id="streak-counter" class="text-orange-400 font-bold">0 días 🔥</span></div>
-          <div class="col-span-2 pt-1 border-t border-cyan-900/40 flex justify-between items-center">
-            <div><span class="text-cyan-500">Oro:</span> <span id="player-gold" class="text-yellow-400 font-bold">🪙 0</span></div>
-            <div><span class="text-cyan-500">Puntos:</span> <span id="stat-points" class="text-cyan-300 font-bold">5</span></div>
-          </div>
-        </div>
-
-        <!-- Barra de EXP -->
-        <div class="mb-3">
-          <div class="flex justify-between text-[11px] mb-1">
-            <span class="text-emerald-400 font-bold">EXP</span>
-            <span id="xp-text" class="text-emerald-300">0 / 100</span>
-          </div>
-          <div class="w-full bg-slate-950 h-2 rounded border border-emerald-950 overflow-hidden">
-            <div id="xp-bar" class="bg-emerald-500 h-full w-0 transition-all duration-300 shadow-[0_0_8px_#10b981]"></div>
-          </div>
-        </div>
-
-        <!-- Barras de HP y MP -->
-        <div class="space-y-1.5 mb-4">
-          <div>
-            <div class="flex justify-between text-[10px] mb-0.5">
-              <span class="text-red-400 font-bold">HP</span>
-              <span id="hp-text" class="text-red-300">100 / 100</span>
-            </div>
-            <div class="w-full bg-slate-950 h-1.5 rounded border border-red-950 overflow-hidden">
-              <div id="hp-bar" class="bg-red-500 h-full w-full transition-all duration-300 shadow-[0_0_8px_#ef4444]"></div>
-            </div>
-          </div>
-          <div>
-            <div class="flex justify-between text-[10px] mb-0.5">
-              <span class="text-blue-400 font-bold">MP</span>
-              <span id="mp-text" class="text-blue-300">50 / 50</span>
-            </div>
-            <div class="w-full bg-slate-950 h-1.5 rounded border border-blue-950 overflow-hidden">
-              <div id="mp-bar" class="bg-blue-500 h-full w-full transition-all duration-300 shadow-[0_0_8px_#3b82f6]"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Atributos -->
-        <div class="space-y-1.5 mb-3">
-          <h2 class="text-[10px] uppercase tracking-wider text-cyan-400/70 border-b border-cyan-900/50 pb-1">Atributos</h2>
-
-          <div class="flex items-center justify-between bg-slate-950/40 px-2.5 py-1 rounded border border-cyan-900/30">
-            <span class="text-xs text-cyan-200">Fuerza (STR)</span>
-            <div class="flex items-center gap-2">
-              <span id="stat-str" class="font-bold text-white text-sm">10</span>
-              <button onclick="addManualPoint('str')" class="w-5 h-5 flex items-center justify-center rounded bg-cyan-950 border border-cyan-500 text-cyan-300 hover:bg-cyan-500 hover:text-black transition-all text-xs font-bold active:scale-95">+</button>
-            </div>
-          </div>
-
-          <div class="flex items-center justify-between bg-slate-950/40 px-2.5 py-1 rounded border border-cyan-900/30">
-            <span class="text-xs text-cyan-200">Agilidad (AGI)</span>
-            <div class="flex items-center gap-2">
-              <span id="stat-agi" class="font-bold text-white text-sm">10</span>
-              <button onclick="addManualPoint('agi')" class="w-5 h-5 flex items-center justify-center rounded bg-cyan-950 border border-cyan-500 text-cyan-300 hover:bg-cyan-500 hover:text-black transition-all text-xs font-bold active:scale-95">+</button>
-            </div>
-          </div>
-
-          <div class="flex items-center justify-between bg-slate-950/40 px-2.5 py-1 rounded border border-cyan-900/30">
-            <span class="text-xs text-cyan-200">Inteligencia (INT)</span>
-            <div class="flex items-center gap-2">
-              <span id="stat-int" class="font-bold text-white text-sm">10</span>
-              <button onclick="addManualPoint('int')" class="w-5 h-5 flex items-center justify-center rounded bg-cyan-950 border border-cyan-500 text-cyan-300 hover:bg-cyan-500 hover:text-black transition-all text-xs font-bold active:scale-95">+</button>
-            </div>
-          </div>
-
-          <div class="flex items-center justify-between bg-slate-950/40 px-2.5 py-1 rounded border border-cyan-900/30">
-            <span class="text-xs text-cyan-200">Vitalidad (VIT)</span>
-            <div class="flex items-center gap-2">
-              <span id="stat-vit" class="font-bold text-white text-sm">10</span>
-              <button onclick="addManualPoint('vit')" class="w-5 h-5 flex items-center justify-center rounded bg-cyan-950 border border-cyan-500 text-cyan-300 hover:bg-cyan-500 hover:text-black transition-all text-xs font-bold active:scale-95">+</button>
-            </div>
-          </div>
+      <div class="grid grid-cols-2 gap-3 text-sm mb-4 bg-black/40 p-3.5 rounded-lg border border-cyan-900/50 shadow-inner">
+        <div><span class="text-cyan-500/80 font-bold">Cazador:</span> <span class="text-white font-bold">Jesús</span></div>
+        <div><span class="text-cyan-500/80 font-bold">Nivel:</span> <span id="player-level" class="text-white font-bold text-base">1</span></div>
+        <div><span class="text-cyan-500/80 font-bold">Rango:</span> <span id="player-rank" class="text-yellow-400 font-extrabold text-base drop-shadow-[0_0_5px_rgba(250,204,21,0.5)]">E</span></div>
+        <div><span class="text-cyan-500/80 font-bold">Racha:</span> <span id="streak-counter" class="text-orange-400 font-bold text-base">0 🔥</span></div>
+        <div class="col-span-2 pt-2 border-t border-cyan-900/40 flex justify-between items-center mt-1">
+            <div class="flex items-center gap-1.5"><span class="text-yellow-500 text-lg">🪙</span><span id="player-gold" class="text-yellow-400 font-bold text-base">0</span></div>
+            <div class="text-cyan-200 font-bold text-xs bg-cyan-900/40 px-2 py-1 rounded border border-cyan-800">Puntos: <span id="stat-points" class="text-cyan-400 text-base">0</span></div>
         </div>
       </div>
-
-      <div class="text-center text-[9px] text-cyan-500/50 mt-1">
-        [SISTEMA EN LÍNEA]
+      <div class="space-y-3 mb-5">
+        <div>
+          <div class="flex justify-between text-xs font-bold mb-1"><span class="text-emerald-400">EXP</span><span id="xp-text" class="text-emerald-200">0 / 100</span></div>
+          <div class="w-full bg-black/60 h-2.5 rounded-full border border-emerald-900/30 overflow-hidden"><div id="xp-bar" class="bg-gradient-to-r from-emerald-600 to-emerald-400 h-full w-0 shadow-[0_0_10px_rgba(16,185,129,0.5)] transition-all duration-500"></div></div>
+        </div>
+        <div>
+          <div class="flex justify-between text-xs font-bold mb-1"><span class="text-red-400">HP</span><span id="hp-text" class="text-red-200">100 / 100</span></div>
+          <div class="w-full bg-black/60 h-2.5 rounded-full border border-red-900/30 overflow-hidden"><div id="hp-bar" class="bg-gradient-to-r from-red-700 to-red-500 h-full w-full shadow-[0_0_10px_rgba(239,68,68,0.5)] transition-all duration-500"></div></div>
+        </div>
+      </div>
+      <div class="space-y-2">
+        <h2 class="text-[11px] uppercase tracking-widest text-cyan-400/60 border-b border-cyan-900/50 pb-1.5 font-bold mb-2">Atributos</h2>
+        <div class="flex items-center justify-between bg-black/30 px-3 py-1.5 rounded-md border border-cyan-900/30 hover:border-cyan-500/50 transition-colors">
+          <span class="text-sm font-semibold text-cyan-100 flex items-center gap-2"><span class="text-red-400">⚔️</span> STR (Daño)</span>
+          <div class="flex gap-3 items-center"><span id="stat-str" class="font-bold text-white text-base">10</span><button onclick="addPoint('str')" class="w-6 h-6 flex items-center justify-center bg-cyan-900/50 border border-cyan-500 text-cyan-300 rounded hover:bg-cyan-500 hover:text-black transition-colors font-bold active:scale-95">+</button></div>
+        </div>
+        <div class="flex items-center justify-between bg-black/30 px-3 py-1.5 rounded-md border border-cyan-900/30 hover:border-cyan-500/50 transition-colors">
+          <span class="text-sm font-semibold text-cyan-100 flex items-center gap-2"><span class="text-emerald-400">👟</span> AGI (Velocidad)</span>
+          <div class="flex gap-3 items-center"><span id="stat-agi" class="font-bold text-white text-base">10</span><button onclick="addPoint('agi')" class="w-6 h-6 flex items-center justify-center bg-cyan-900/50 border border-cyan-500 text-cyan-300 rounded hover:bg-cyan-500 hover:text-black transition-colors font-bold active:scale-95">+</button></div>
+        </div>
+        <div class="flex items-center justify-between bg-black/30 px-3 py-1.5 rounded-md border border-cyan-900/30 hover:border-cyan-500/50 transition-colors">
+          <span class="text-sm font-semibold text-cyan-100 flex items-center gap-2"><span class="text-purple-400">🧠</span> INT (Magia)</span>
+          <div class="flex gap-3 items-center"><span id="stat-int" class="font-bold text-white text-base">10</span><button onclick="addPoint('int')" class="w-6 h-6 flex items-center justify-center bg-cyan-900/50 border border-cyan-500 text-cyan-300 rounded hover:bg-cyan-500 hover:text-black transition-colors font-bold active:scale-95">+</button></div>
+        </div>
+        <div class="flex items-center justify-between bg-black/30 px-3 py-1.5 rounded-md border border-cyan-900/30 hover:border-cyan-500/50 transition-colors">
+          <span class="text-sm font-semibold text-cyan-100 flex items-center gap-2"><span class="text-amber-400">🛡️</span> VIT (Defensa)</span>
+          <div class="flex gap-3 items-center"><span id="stat-vit" class="font-bold text-white text-base">10</span><button onclick="addPoint('vit')" class="w-6 h-6 flex items-center justify-center bg-cyan-900/50 border border-cyan-500 text-cyan-300 rounded hover:bg-cyan-500 hover:text-black transition-colors font-bold active:scale-95">+</button></div>
+        </div>
       </div>
     </div>
 
-    <!-- PANEL 2: AVATAR 3D ROTABLE + INVENTARIO (Columna Centro) -->
-    <div class="lg:col-span-4 bg-slate-900/90 rounded-lg system-border p-4 backdrop-blur-md flex flex-col justify-between text-center relative overflow-hidden">
-      <div>
-        <div class="w-full mb-1">
-          <p class="text-[10px] uppercase tracking-widest text-cyan-400/70 mb-0.5">Visualizador del Cazador 3D</p>
-          <h2 id="avatar-title" class="text-base font-bold text-cyan-100 neon-text uppercase">Rango E - Recluta</h2>
-          <p id="avatar-equipment-label" class="text-[11px] text-cyan-400/80">Atuendo Táctico Básico</p>
-        </div>
-
-        <!-- Canvas 3D -->
-        <div class="relative w-full h-48 bg-slate-950/90 rounded-lg border border-cyan-900/60 overflow-hidden flex items-center justify-center cursor-grab active:cursor-grabbing mb-3" id="avatar-container">
-          <div class="absolute bottom-1 inset-x-0 text-center pointer-events-none text-[9px] text-cyan-400/60 tracking-wider">
-            ↺ Arrastra para girar 360°
-          </div>
-        </div>
-
-        <!-- SECCIÓN DE INVENTARIO DEL CAZADOR -->
-        <div class="text-left bg-slate-950/70 p-2.5 rounded border border-cyan-900/50">
-          <div class="flex justify-between items-center mb-1.5 border-b border-cyan-900/40 pb-1">
-            <span class="text-[10px] uppercase tracking-wider text-cyan-300 font-bold">Inventario del Cazador</span>
-            <button onclick="triggerLootBoxManual()" class="px-2 py-0.5 rounded bg-cyan-950 hover:bg-cyan-800 border border-cyan-500/60 text-[9px] text-cyan-200">
-              🎁 Abrir Caja (${playerData.lootBoxes || 0})
-            </button>
-          </div>
-          <!-- Rejilla de objetos -->
-          <div id="inventory-grid" class="grid grid-cols-4 gap-1.5 max-h-20 overflow-y-auto"></div>
-        </div>
+    <!-- PANEL 2: AVATAR 3D DETALLADO + INVENTARIO -->
+    <div class="lg:col-span-4 system-panel rounded-xl system-border p-5 lg:p-6 flex flex-col justify-between">
+      <div class="w-full mb-3 text-center">
+        <p class="text-[11px] uppercase tracking-widest text-cyan-400/70 font-semibold mb-1">Visualizador de Cazador</p>
+        <h2 id="avatar-title" class="text-xl font-bold text-cyan-100 neon-text uppercase tracking-widest">Rango E - Recluta</h2>
+        <p id="avatar-equipment-label" class="text-xs text-cyan-300/80 font-medium">Atuendo Táctico Básico</p>
       </div>
-
-      <div class="w-full bg-slate-950/60 p-2 rounded border border-cyan-900/40 text-[10px] text-cyan-400/90 text-left mt-2">
-        <span class="text-cyan-200 font-semibold block">Siguiente evolución:</span>
-        <span id="next-gear-text" class="text-cyan-400">Nivel 5: Desbloquear Daga de Acero</span>
+      <div class="relative w-full h-52 bg-gradient-to-b from-black/80 to-slate-900/80 rounded-xl border border-cyan-900/60 overflow-hidden flex items-center justify-center cursor-grab active:cursor-grabbing mb-4 shadow-inner" id="avatar-container">
+        <div class="absolute bottom-2 text-[10px] uppercase tracking-widest text-cyan-400/40 pointer-events-none font-bold">↺ Arrastra para girar</div>
+      </div>
+      <div class="text-left bg-black/40 p-3.5 rounded-lg border border-cyan-900/50">
+        <div class="flex justify-between items-center mb-2.5 border-b border-cyan-900/40 pb-2">
+          <span class="text-xs uppercase tracking-widest text-cyan-300 font-bold">Inventario</span>
+          <button onclick="triggerLootBoxManual()" class="px-3 py-1 rounded bg-cyan-900/50 hover:bg-cyan-700 border border-cyan-500/60 text-[10px] text-cyan-100 uppercase tracking-widest font-bold transition-colors">🎁 Abrir Caja</button>
+        </div>
+        <div id="inventory-grid" class="grid grid-cols-4 gap-2 max-h-28 overflow-y-auto"></div>
       </div>
     </div>
 
-    <!-- PANEL 3: MISIONES DIARIAS (Columna Derecha) -->
-    <div class="lg:col-span-4 bg-slate-900/90 rounded-lg system-border p-5 backdrop-blur-md flex flex-col justify-between">
+    <!-- PANEL 3: MISIONES AUTOMATIZADAS -->
+    <div class="lg:col-span-4 system-panel rounded-xl system-border p-5 lg:p-6 flex flex-col justify-between">
       <div>
-        <div class="border-b border-cyan-500/40 pb-2 mb-3 text-center">
-          <p class="text-[10px] uppercase tracking-widest text-cyan-400/70">Misión Diaria</p>
-          <h2 class="text-xl font-bold tracking-wider text-cyan-100 neon-text">ENTRENAMIENTO</h2>
+        <div class="border-b border-cyan-500/30 pb-3 mb-4 text-center">
+          <p class="text-[11px] uppercase tracking-widest text-cyan-400/70 font-semibold">Misión Diaria</p>
+          <h2 class="text-2xl font-extrabold text-cyan-100 neon-text tracking-widest mt-1">ENTRENAMIENTO</h2>
         </div>
-
-        <!-- Formulario -->
-        <form onsubmit="handleCreateQuest(event)" class="mb-3 bg-slate-950/60 p-2.5 rounded border border-cyan-900/40 space-y-2">
-          <input 
-            id="new-quest-title" 
-            type="text" 
-            placeholder="Nueva misión (ej: 45 min ejercicio/estudio)" 
-            required
-            class="w-full bg-slate-900 border border-cyan-900 rounded px-2.5 py-1 text-xs text-cyan-100 focus:outline-none focus:border-cyan-400 placeholder-cyan-700"
-          />
+        <form onsubmit="handleCreateQuest(event)" class="mb-4 bg-black/30 p-3 rounded-lg border border-cyan-900/40 space-y-2.5">
+          <input id="new-quest-title" type="text" placeholder="Ej: 45 min código Python..." required class="w-full bg-black/50 border border-cyan-800 rounded px-3 py-2 text-sm text-cyan-100 outline-none focus:border-cyan-400 transition-colors font-medium placeholder-cyan-800" />
           <div class="flex gap-2">
-            <select 
-              id="new-quest-stat"
-              class="flex-1 bg-slate-900 border border-cyan-900 rounded px-2 py-1 text-xs text-cyan-200 focus:outline-none focus:border-cyan-400 cursor-pointer"
-            >
-              <option value="none">Sin Atributo (Solo EXP)</option>
-              <option value="str">Fuerza (+1 STR)</option>
-              <option value="agi">Agilidad (+1 AGI)</option>
-              <option value="int">Inteligencia (+1 INT)</option>
-              <option value="vit">Vitalidad (+1 VIT)</option>
+            <select id="new-quest-stat" class="flex-1 bg-black/50 border border-cyan-800 rounded px-2 py-1.5 text-xs font-bold text-cyan-200 outline-none cursor-pointer">
+              <option value="none">Sin Atributo</option><option value="str">Fuerza (+1 STR)</option><option value="agi">Agilidad (+1 AGI)</option><option value="int">Inteligencia (+1 INT)</option><option value="vit">Vitalidad (+1 VIT)</option>
             </select>
-            <input 
-              id="new-quest-xp" 
-              type="number" 
-              placeholder="EXP" 
-              value="30" 
-              min="5" 
-              max="200" 
-              required
-              class="w-16 bg-slate-900 border border-cyan-900 rounded px-2 py-1 text-xs text-center text-cyan-100 focus:outline-none focus:border-cyan-400"
-            />
+            <input id="new-quest-xp" type="number" value="30" min="5" max="200" required class="w-16 bg-black/50 border border-cyan-800 rounded px-2 py-1.5 text-sm font-bold text-center text-cyan-100 outline-none" />
           </div>
-          <button type="submit" class="w-full py-1.5 bg-cyan-950 hover:bg-cyan-900 border border-cyan-500/60 text-cyan-300 hover:text-white rounded text-xs font-semibold tracking-wider transition-all active:scale-[0.98]">
-            + ASIGNAR NUEVA MISIÓN
-          </button>
+          <button type="submit" class="w-full py-2 bg-cyan-900/60 hover:bg-cyan-800 border border-cyan-500/50 text-cyan-100 rounded text-sm uppercase tracking-widest font-bold transition-all active:scale-95 shadow-[0_0_10px_rgba(0,240,255,0.1)]">+ Añadir Misión</button>
         </form>
-
-        <div class="space-y-2 max-h-[280px] overflow-y-auto pr-1" id="quests-container"></div>
+        <div class="space-y-2 max-h-[220px] overflow-y-auto pr-1" id="quests-container"></div>
       </div>
-
-      <div class="mt-3 pt-2.5 border-t border-cyan-900/50 flex justify-between items-center">
-        <span class="text-[11px] text-cyan-500">Finalizar día:</span>
-        <button onclick="endDayEvaluation()" class="px-3 py-1 bg-cyan-950 hover:bg-cyan-800 border border-cyan-400/60 text-cyan-200 text-xs rounded transition-all font-semibold active:scale-95 shadow-[0_0_8px_rgba(0,240,255,0.2)]">
-          Cerrar Día y Evaluar
-        </button>
+      <div class="mt-4 pt-4 border-t border-cyan-900/50 flex justify-center items-center shrink-0">
+        <span class="text-[10px] font-bold text-cyan-500/60 uppercase tracking-widest text-center animate-pulse">[ Evaluación automática a medianoche ]</span>
       </div>
     </div>
-
   </div>
 
   <script>
-    // --- MOTOR DE SONIDO (Web Audio API) ---
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    // --- CONTROLADOR DE ALERTAS HOLOGRÁFICAS (Reemplaza a alert nativo) ---
+    function sysAlert(msg, title = "AVISO DEL SISTEMA", color = "cyan") {
+      const modal = document.getElementById('sys-alert-modal');
+      const titleEl = document.getElementById('sys-alert-title');
+      const msgEl = document.getElementById('sys-alert-msg');
+      const btn = document.getElementById('sys-alert-btn');
+      const box = document.getElementById('sys-alert-box');
 
-    function playBeep(freq = 600, duration = 0.08, type = 'sine') {
-      try {
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = type;
-        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start();
-        osc.stop(audioCtx.currentTime + duration);
-      } catch (e) {
-        console.log(e);
-      }
-    }
+      titleEl.innerText = title; msgEl.innerText = msg;
+      
+      // Reset classes
+      box.className = `w-full max-w-sm bg-[#0a0f1a] border-2 p-6 rounded-lg text-center modal-animate relative shadow-[0_0_30px_rgba(0,0,0,0.8)]`;
+      titleEl.className = `text-xl font-bold mb-2 uppercase tracking-widest`;
+      btn.className = `w-full py-2.5 font-bold uppercase tracking-widest rounded transition-all active:scale-95 border`;
 
-    function playLevelUpSound() {
-      const notes = [440, 554.37, 659.25, 880, 1108.73];
-      notes.forEach((freq, index) => {
-        setTimeout(() => { playBeep(freq, 0.25, 'triangle'); }, index * 90);
-      });
+      if (color === 'red') { box.classList.add('border-red-600', 'shadow-[0_0_30px_rgba(239,68,68,0.2)]'); titleEl.classList.add('text-red-500', 'red-neon-text'); btn.classList.add('bg-red-900/80', 'border-red-500', 'text-red-100', 'hover:bg-red-800'); } 
+      else if (color === 'yellow') { box.classList.add('border-yellow-500', 'shadow-[0_0_30px_rgba(250,204,21,0.2)]'); titleEl.classList.add('text-yellow-400', 'gold-neon-text'); btn.classList.add('bg-yellow-700/80', 'border-yellow-400', 'text-yellow-100', 'hover:bg-yellow-600'); } 
+      else if (color === 'green') { box.classList.add('border-emerald-500', 'shadow-[0_0_30px_rgba(16,185,129,0.2)]'); titleEl.classList.add('text-emerald-400'); btn.classList.add('bg-emerald-800/80', 'border-emerald-500', 'text-emerald-100', 'hover:bg-emerald-700'); } 
+      else { box.classList.add('border-cyan-500', 'shadow-[0_0_30px_rgba(0,240,255,0.2)]'); titleEl.classList.add('text-cyan-400', 'neon-text'); btn.classList.add('bg-cyan-900/80', 'border-cyan-500', 'text-cyan-100', 'hover:bg-cyan-800'); }
+      
+      modal.classList.remove('hidden');
     }
+    function closeSysAlert() { document.getElementById('sys-alert-modal').classList.add('hidden'); }
 
-    function playPenaltyAlarm() {
-      const freqs = [200, 150, 200, 150];
-      freqs.forEach((f, idx) => {
-        setTimeout(() => { playBeep(f, 0.2, 'sawtooth'); }, idx * 180);
-      });
-    }
-
-    function playLootOpenSound() {
-      const notes = [523.25, 659.25, 783.99, 1046.50];
-      notes.forEach((freq, idx) => {
-        setTimeout(() => { playBeep(freq, 0.15, 'sine'); }, idx * 100);
-      });
-    }
 
     // --- ESTADO Y PERSISTENCIA ---
-    const defaultData = {
-      level: 1,
-      rank: 'E',
-      streak: 0,
-      gold: 50,
-      lootBoxes: 1,
-      availablePoints: 5,
-      xp: 0,
-      xpNeeded: 100,
-      hp: 100,
-      maxHp: 100,
-      mp: 50,
-      maxMp: 50,
-      stats: { str: 10, agi: 10, int: 10, vit: 10 },
-      inventory: [
-        { id: 'potion_hp', name: 'Poción de Vida', icon: '🧪', count: 2, desc: 'Restaura 50 puntos de HP.' },
-        { id: 'elixir_xp', name: 'Elixir de EXP', icon: '✨', count: 1, desc: 'Otorga 35 puntos de EXP al instante.' }
-      ],
-      quests: [
-        { id: 1, title: "100 Flexiones / Ejercicio de fuerza", xp: 40, stat: 'str', done: false },
-        { id: 2, title: "45 Minutos de Estudio o Código", xp: 40, stat: 'int', done: false },
-        { id: 3, title: "Tomar 2 Litros de Agua", xp: 20, stat: 'vit', done: false }
-      ]
-    };
+    let playerData = JSON.parse(localStorage.getItem('solo_leveling_save')) || { level: 1, rank: 'E', streak: 0, gold: 50, lootBoxes: 1, availablePoints: 5, xp: 0, xpNeeded: 100, hp: 100, maxHp: 100, mp: 50, maxMp: 50, stats: { str: 10, agi: 10, int: 10, vit: 10 }, inventory: [{ id: 'potion_hp', name: 'Poción HP', icon: '🧪', count: 3 }], quests: [{ id: 1, title: "100 Flexiones", xp: 40, stat: 'str', done: false }], lastLoginDate: '' };
+    if (playerData.hp <= 0) playerData.hp = playerData.maxHp;
+    if(!playerData.inventory.find(i => i.id === 'dungeon_key')) playerData.inventory.push({ id: 'dungeon_key', name: 'Llave de Mazmorra', icon: '🗝️', count: 1 });
+    
+    function save() { localStorage.setItem('solo_leveling_save', JSON.stringify(playerData)); updateScreen(); }
 
-    let playerData = JSON.parse(localStorage.getItem('solo_leveling_save')) || defaultData;
-    // Retrocompatibilidad
-    if (typeof playerData.streak === 'undefined') playerData.streak = 0;
-    if (typeof playerData.gold === 'undefined') playerData.gold = 50;
-    if (typeof playerData.lootBoxes === 'undefined') playerData.lootBoxes = 1;
-    if (!playerData.inventory) playerData.inventory = defaultData.inventory;
-    if (typeof playerData.hp === 'undefined') { playerData.hp = 100; playerData.maxHp = 100; }
-    if (typeof playerData.mp === 'undefined') { playerData.mp = 50; playerData.maxMp = 50; }
-
-    function save() {
-      localStorage.setItem('solo_leveling_save', JSON.stringify(playerData));
-      updateScreen();
+    function checkSystemDate() {
+      const today = new Date().toDateString();
+      if (!playerData.lastLoginDate) { playerData.lastLoginDate = today; save(); return; }
+      if (playerData.lastLoginDate !== today) {
+        if (playerData.quests && playerData.quests.length > 0) {
+          const allDone = playerData.quests.every(q => q.done);
+          if (allDone) {
+            playerData.streak++; playerData.lootBoxes = (playerData.lootBoxes || 0) + 1;
+            sysAlert(`Evaluación del día anterior completada.\n\n¡DÍA PERFECTO!\nRacha actual: ${playerData.streak} 🔥\nRecompensa: +1 Caja Misteriosa.`, "[ EVALUACIÓN POSITIVA ]", "green");
+          } else {
+            playerData.streak = 0; document.getElementById('penalty-modal').classList.remove('hidden');
+          }
+          playerData.quests.forEach(q => q.done = false);
+        }
+        playerData.lastLoginDate = today; save();
+      }
     }
 
-    function addManualPoint(statName) {
-      if (playerData.availablePoints > 0) {
-        playerData.stats[statName]++;
-        playerData.availablePoints--;
-        playBeep(850, 0.07);
+    function handleCreateQuest(e) { e.preventDefault(); const t = document.getElementById('new-quest-title').value.trim(); const s = document.getElementById('new-quest-stat').value; const x = parseInt(document.getElementById('new-quest-xp').value, 10); if (!t || isNaN(x)) return; playerData.quests.push({ id: Date.now(), title: t, stat: s, xp: x, done: false }); document.getElementById('new-quest-title').value = ''; save(); }
+    function toggleQuest(id) { const q = playerData.quests.find(x => x.id === id); if (q) { q.done = !q.done; if (q.done) { playerData.xp += q.xp; playerData.gold += 15; if(q.stat !== 'none') playerData.stats[q.stat]++; checkLevelUp(); } else { playerData.xp = Math.max(0, playerData.xp - q.xp); playerData.gold = Math.max(0, playerData.gold - 15); if(q.stat !== 'none') playerData.stats[q.stat] = Math.max(10, playerData.stats[q.stat] - 1); } save(); } }
+    function deleteQuest(id, e) { e.stopPropagation(); const q = playerData.quests.find(x => x.id === id); if(q && q.done) { playerData.xp = Math.max(0, playerData.xp - q.xp); if(q.stat !== 'none') playerData.stats[q.stat]--; } playerData.quests = playerData.quests.filter(x => x.id !== id); save(); }
+    function acceptPenalty() { document.getElementById('penalty-modal').classList.add('hidden'); }
+    function addPoint(s) { if(playerData.availablePoints > 0) { playerData.stats[s]++; playerData.availablePoints--; save(); } else { sysAlert("No tienes Puntos de Atributo disponibles. Sube de nivel para conseguir más.", "[ PUNTOS INSUFICIENTES ]", "yellow"); } }
+    function checkLevelUp() { let leveled = false; while (playerData.xp >= playerData.xpNeeded) { playerData.xp -= playerData.xpNeeded; playerData.level++; playerData.availablePoints += 5; playerData.lootBoxes = (playerData.lootBoxes || 0) + 1; playerData.xpNeeded = Math.floor(playerData.xpNeeded * 1.5); playerData.maxHp += 20; playerData.hp = playerData.maxHp; if(playerData.level >= 40) playerData.rank = 'S'; else if(playerData.level >= 30) playerData.rank = 'A'; else if(playerData.level >= 20) playerData.rank = 'B'; else if(playerData.level >= 10) playerData.rank = 'C'; else if(playerData.level >= 5) playerData.rank = 'D'; leveled = true; } if(leveled) { document.getElementById('modal-level-text').innerText = `Nivel ${playerData.level}`; document.getElementById('levelup-modal').classList.remove('hidden'); } }
+    function closeLevelUpModal() { document.getElementById('levelup-modal').classList.add('hidden'); save(); }
+    
+    // --- ANIMACIÓN DE CAJA MISTERIOSA MEJORADA ---
+    function triggerLootBoxManual() { 
+      if((playerData.lootBoxes || 0) <= 0) return sysAlert("No tienes Cajas Misteriosas en tu inventario. Completa días perfectos o sube de nivel para obtenerlas.", "[ INVENTARIO VACÍO ]", "cyan"); 
+      document.getElementById('loot-title-ui').innerText = "INVENTARIO";
+      document.getElementById('loot-icon').innerText = "🎁";
+      document.getElementById('loot-desc').innerText = `Tienes ${playerData.lootBoxes} Caja(s) Misteriosa(s) lista(s) para abrir.`;
+      document.getElementById('loot-action-container').innerHTML = `<button onclick="openLootBox()" class="w-full py-3 bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold uppercase tracking-widest rounded transition-all active:scale-95 shadow-[0_0_15px_rgba(0,240,255,0.4)]">Abrir Caja</button>`; 
+      document.getElementById('lootbox-modal').classList.remove('hidden'); 
+    }
+
+    function openLootBox() { 
+      if(playerData.lootBoxes <= 0) return; 
+      
+      const icon = document.getElementById('loot-icon');
+      const actionContainer = document.getElementById('loot-action-container');
+      
+      // Secuencia de Animación
+      actionContainer.innerHTML = `<button disabled class="w-full py-3 bg-slate-700 text-slate-400 font-extrabold uppercase tracking-widest rounded cursor-not-allowed">Abriendo...</button>`;
+      icon.classList.add('animate-shake');
+      
+      // Efecto de sonido de "carga"
+      try { const ax=new(window.AudioContext||window.webkitAudioContext)(); const o=ax.createOscillator(); o.frequency.setValueAtTime(200,ax.currentTime); o.frequency.exponentialRampToValueAtTime(800,ax.currentTime+1); o.connect(ax.destination); o.start(); o.stop(ax.currentTime+1); }catch(e){}
+
+      setTimeout(() => {
+        icon.classList.remove('animate-shake');
+        
+        // Destello blanco
+        const flash = document.getElementById('lootbox-flash');
+        flash.classList.remove('hidden');
+        flash.className = "flash-overlay";
+        setTimeout(() => flash.classList.add('hidden'), 800);
+
+        playerData.lootBoxes--; 
+        const tbl = [{t:'hp', i:'🧪', n:'Poción HP'}, {t:'key', i:'🗝️', n:'Llave de Mazmorra'}, {t:'gold', a:100}, {t:'pts', a:2}]; 
+        const r = tbl[Math.floor(Math.random() * tbl.length)]; let txt = '';
+        
+        if(r.t === 'gold') { txt = `+100 Monedas de Oro`; playerData.gold += 100; icon.innerText = '🪙'; } 
+        else if(r.t === 'pts') { txt = `+2 Puntos de Atributo`; playerData.availablePoints += 2; icon.innerText = '⭐'; } 
+        else { txt = `1x ${r.n}`; icon.innerText = r.i; const ext = playerData.inventory.find(x => x.id === (r.t==='hp'?'potion_hp':'dungeon_key')); if(ext) ext.count++; else playerData.inventory.push({id: (r.t==='hp'?'potion_hp':'dungeon_key'), name: r.n, icon: r.i, count: 1}); }
+        
+        // Efecto sonido éxito
+        try { const ax=new(window.AudioContext||window.webkitAudioContext)(); const o=ax.createOscillator(); o.type='triangle'; o.frequency.setValueAtTime(600,ax.currentTime); o.frequency.setValueAtTime(800,ax.currentTime+0.1); o.connect(ax.destination); o.start(); o.stop(ax.currentTime+0.3); }catch(e){}
+
+        document.getElementById('loot-title-ui').innerText = "¡RECOMPENSA OBTENIDA!";
+        document.getElementById('loot-desc').innerHTML = `<span class="text-white text-lg font-bold">${txt}</span>`; 
+        actionContainer.innerHTML = `<button onclick="closeLootBox()" class="w-full py-3 bg-yellow-500 hover:bg-yellow-400 text-black font-extrabold uppercase tracking-widest rounded transition-all active:scale-95 shadow-[0_0_15px_rgba(250,204,21,0.5)]">Guardar en Inventario</button>`; 
         save();
-      } else {
-        playBeep(220, 0.15, 'sawtooth');
-      }
+      }, 1000);
+    }
+    function closeLootBox() { document.getElementById('lootbox-modal').classList.add('hidden'); }
+    
+    function useItem(id) { 
+      const i = playerData.inventory.find(x => x.id === id); if (!i || i.count <= 0) return; 
+      if (id === 'potion_hp') { 
+        if (playerData.hp >= playerData.maxHp) return sysAlert("Tu vitalidad (HP) ya está al máximo. No necesitas usar esta poción ahora.", "[ ESTADO ÓPTIMO ]", "green"); 
+        playerData.hp = Math.min(playerData.maxHp, playerData.hp + 50); i.count--; 
+        try { const ax=new(window.AudioContext||window.webkitAudioContext)(); const o=ax.createOscillator(); o.frequency.setValueAtTime(400,ax.currentTime); o.frequency.exponentialRampToValueAtTime(600,ax.currentTime+0.2); o.connect(ax.destination); o.start(); o.stop(ax.currentTime+0.2); }catch(e){}
+      } else if (id === 'dungeon_key') { 
+        if (playerData.hp < 30) return sysAlert("Tus niveles de vida son demasiado bajos para entrar al Portal. Toma una poción de HP primero para no morir en el intento.", "[ ADVERTENCIA CRÍTICA ]", "red"); 
+        i.count--; startDungeon(); 
+      } 
+      playerData.inventory = playerData.inventory.filter(x => x.count > 0); save(); 
     }
 
-    function toggleQuest(id) {
-      const quest = playerData.quests.find(q => q.id === id);
-      if (!quest) return;
-
-      quest.done = !quest.done;
-
-      if (quest.done) {
-        playBeep(700, 0.12);
-        playerData.xp += quest.xp;
-        playerData.gold += 15; // Recompensa de oro por tarea cumplida
-        if (quest.stat && quest.stat !== 'none') {
-          playerData.stats[quest.stat] = (playerData.stats[quest.stat] || 10) + 1;
-        }
-        checkLevelUp();
-      } else {
-        playBeep(400, 0.1);
-        playerData.xp = Math.max(0, playerData.xp - quest.xp);
-        playerData.gold = Math.max(0, playerData.gold - 15);
-        if (quest.stat && quest.stat !== 'none') {
-          playerData.stats[quest.stat] = Math.max(10, (playerData.stats[quest.stat] || 10) - 1);
-        }
-      }
-
-      save();
-    }
-
-    function handleCreateQuest(e) {
-      e.preventDefault();
-      const titleInput = document.getElementById('new-quest-title');
-      const statSelect = document.getElementById('new-quest-stat');
-      const xpInput = document.getElementById('new-quest-xp');
-
-      const title = titleInput.value.trim();
-      const stat = statSelect.value;
-      const xp = parseInt(xpInput.value, 10);
-
-      if (!title || isNaN(xp) || xp <= 0) return;
-
-      const newQuest = {
-        id: Date.now(),
-        title: title,
-        stat: stat,
-        xp: xp,
-        done: false
-      };
-
-      playerData.quests.push(newQuest);
-      titleInput.value = '';
-      xpInput.value = '30';
-      statSelect.value = 'none';
-
-      playBeep(900, 0.1, 'sine');
-      save();
-    }
-
-    function deleteQuest(id, event) {
-      event.stopPropagation();
-      const quest = playerData.quests.find(q => q.id === id);
-      if (quest && quest.done) {
-        playerData.xp = Math.max(0, playerData.xp - quest.xp);
-        playerData.gold = Math.max(0, playerData.gold - 15);
-        if (quest.stat && quest.stat !== 'none') {
-          playerData.stats[quest.stat] = Math.max(10, playerData.stats[quest.stat] - 1);
-        }
-      }
-      playerData.quests = playerData.quests.filter(q => q.id !== id);
-      playBeep(300, 0.1, 'sawtooth');
-      save();
-    }
-
-    function checkLevelUp() {
-      let leveledUp = false;
-      let unlockedGear = false;
-      const prevLevel = playerData.level;
-
-      while (playerData.xp >= playerData.xpNeeded) {
-        playerData.xp -= playerData.xpNeeded;
-        playerData.level++;
-        playerData.availablePoints += 5;
-        playerData.lootBoxes = (playerData.lootBoxes || 0) + 1; // +1 Caja por subir nivel
-        playerData.xpNeeded = Math.floor(playerData.xpNeeded * 1.5);
-
-        if (playerData.level >= 40) playerData.rank = 'S';
-        else if (playerData.level >= 30) playerData.rank = 'A';
-        else if (playerData.level >= 20) playerData.rank = 'B';
-        else if (playerData.level >= 10) playerData.rank = 'C';
-        else if (playerData.level >= 5) playerData.rank = 'D';
-
-        leveledUp = true;
-      }
-
-      if (leveledUp) {
-        if ((prevLevel < 5 && playerData.level >= 5) ||
-            (prevLevel < 10 && playerData.level >= 10) ||
-            (prevLevel < 20 && playerData.level >= 20) ||
-            (prevLevel < 30 && playerData.level >= 30)) {
-          unlockedGear = true;
-        }
-
-        setTimeout(() => {
-          playLevelUpSound();
-          showLevelUpModal(playerData.level, unlockedGear);
-        }, 150);
-      }
-    }
-
-    function showLevelUpModal(level, unlockedGear) {
-      document.getElementById('modal-level-text').innerText = `Nivel ${level}`;
-      const gearNotice = document.getElementById('modal-gear-unlock');
-      if (unlockedGear) {
-        gearNotice.classList.remove('hidden');
-      } else {
-        gearNotice.classList.add('hidden');
-      }
-      document.getElementById('levelup-modal').classList.remove('hidden');
-    }
-
-    function closeLevelUpModal() {
-      playBeep(500, 0.08);
-      document.getElementById('levelup-modal').classList.add('hidden');
-    }
-
-    // --- SISTEMA DE CAJAS DE BOTÍN (LOOT BOX) ---
-    function triggerLootBoxManual() {
-      if ((playerData.lootBoxes || 0) <= 0) {
-        alert("No tienes Cajas de Recompensa disponibles.\n¡Completa tu día al 100% o sube de nivel para conseguir una!");
-        return;
-      }
-      document.getElementById('loot-icon').innerText = '🎁';
-      document.getElementById('loot-title').innerText = 'Caja de Suministros del Sistema';
-      document.getElementById('loot-desc').innerText = 'Toca el botón para romper el sello y revelar tu recompensa.';
-      document.getElementById('loot-action-container').innerHTML = `
-        <button onclick="openLootBox()" class="w-full py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold uppercase tracking-wider rounded transition-all active:scale-95 text-xs shadow-[0_0_15px_rgba(0,240,255,0.5)]">
-          Abrir Caja de Botín
-        </button>
-      `;
-      document.getElementById('lootbox-modal').classList.remove('hidden');
-    }
-
-    function openLootBox() {
-      if (playerData.lootBoxes <= 0) return;
-      playerData.lootBoxes--;
-      playLootOpenSound();
-
-      // Posibles recompensas aleatorias
-      const lootTable = [
-        { type: 'item', item: { id: 'potion_hp', name: 'Poción de Vida', icon: '🧪', count: 1, desc: 'Restaura 50 puntos de HP.' } },
-        { type: 'item', item: { id: 'elixir_xp', name: 'Elixir de EXP', icon: '✨', count: 1, desc: 'Otorga 35 puntos de EXP al instante.' } },
-        { type: 'gold', amount: 80, text: '80 Monedas de Oro 🪙' },
-        { type: 'points', amount: 2, text: '2 Puntos Libres de Atributo ⭐' }
-      ];
-
-      const reward = lootTable[Math.floor(Math.random() * lootTable.length)];
-      let rewardText = '';
-      let rewardIcon = '🎁';
-
-      if (reward.type === 'item') {
-        rewardIcon = reward.item.icon;
-        rewardText = `Obtuviste: 1x ${reward.item.name}`;
-        // Agregar al inventario
-        const existing = playerData.inventory.find(i => i.id === reward.item.id);
-        if (existing) existing.count += 1;
-        else playerData.inventory.push({ ...reward.item, count: 1 });
-      } else if (reward.type === 'gold') {
-        rewardIcon = '🪙';
-        rewardText = `Obtuviste: +${reward.amount} Oro`;
-        playerData.gold += reward.amount;
-      } else if (reward.type === 'points') {
-        rewardIcon = '⭐';
-        rewardText = `Obtuviste: +${reward.amount} Puntos de Atributo`;
-        playerData.availablePoints += reward.amount;
-      }
-
-      document.getElementById('loot-icon').innerText = rewardIcon;
-      document.getElementById('loot-title').innerText = "¡RECOMPENSA OBTENIDA!";
-      document.getElementById('loot-desc').innerText = rewardText;
-      document.getElementById('loot-action-container').innerHTML = `
-        <button onclick="closeLootBox()" class="w-full py-2 bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-bold uppercase tracking-wider rounded transition-all active:scale-95 text-xs shadow-[0_0_15px_rgba(250,204,21,0.5)]">
-          Guardar en Inventario
-        </button>
-      `;
-
-      save();
-    }
-
-    function closeLootBox() {
-      playBeep(450, 0.08);
-      document.getElementById('lootbox-modal').classList.add('hidden');
-    }
-
-    // Usar objetos del inventario
-    function useItem(itemId) {
-      const item = playerData.inventory.find(i => i.id === itemId);
-      if (!item || item.count <= 0) return;
-
-      if (itemId === 'potion_hp') {
-        if (playerData.hp >= playerData.maxHp) {
-          alert("Tu HP ya está al máximo.");
-          return;
-        }
-        playerData.hp = Math.min(playerData.maxHp, playerData.hp + 50);
-        item.count--;
-        playBeep(800, 0.15);
-      } else if (itemId === 'elixir_xp') {
-        playerData.xp += 35;
-        item.count--;
-        playBeep(950, 0.15);
-        checkLevelUp();
-      }
-
-      // Limpiar ítems agotados
-      playerData.inventory = playerData.inventory.filter(i => i.count > 0);
-      save();
-    }
-
-    // --- EVALUACIÓN DIARIA ---
-    function endDayEvaluation() {
-      if (playerData.quests.length === 0) {
-        alert("No tienes misiones para evaluar.");
-        return;
-      }
-
-      const totalQuests = playerData.quests.length;
-      const doneQuests = playerData.quests.filter(q => q.done).length;
-      const allDone = doneQuests === totalQuests;
-
-      if (allDone) {
-        playerData.streak++;
-        playerData.lootBoxes = (playerData.lootBoxes || 0) + 1; // +1 Caja por día perfecto
-        playBeep(880, 0.2);
-        alert(`¡DÍA PERFECTO COMPLETADO!\nHas cumplido todas tus misiones.\nRacha: ${playerData.streak} días.\n¡Recibiste 1 Caja Misteriosa del Sistema! 🎁`);
-        playerData.quests.forEach(q => q.done = false);
-        save();
-      } else {
-        playerData.streak = 0;
-        playPenaltyAlarm();
-        document.getElementById('penalty-modal').classList.remove('hidden');
-      }
-    }
-
-    function acceptPenalty() {
-      playBeep(450, 0.1);
-      document.getElementById('penalty-modal').classList.add('hidden');
-      playerData.quests.forEach(q => q.done = false);
-      save();
-    }
-
-    // ==========================================
-    // --- THREE.JS 3D VOXEL ENGINE ---
-    // ==========================================
-    let scene, camera, renderer, hunterGroup;
-    let gearObjects = {};
-    let isDragging = false;
-    let previousPointerX = 0;
-    let targetRotationY = 0;
-
-    function init3D() {
-      const container = document.getElementById('avatar-container');
-      const width = container.clientWidth;
-      const height = container.clientHeight;
-
-      scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 1000);
-      camera.position.set(0, 1.2, 5.8);
-
-      renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-      renderer.setSize(width, height);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      container.appendChild(renderer.domElement);
-
-      const ambientLight = new THREE.AmbientLight(0xdbeafe, 0.85);
-      scene.add(ambientLight);
-
-      const cyanDirLight = new THREE.DirectionalLight(0x00f0ff, 1.2);
-      cyanDirLight.position.set(4, 8, 5);
-      scene.add(cyanDirLight);
-
-      const purpleRimLight = new THREE.PointLight(0xa855f7, 1.5, 10);
-      purpleRimLight.position.set(-3, 2, -4);
-      scene.add(purpleRimLight);
-
-      hunterGroup = new THREE.Group();
-      hunterGroup.position.y = -0.5;
-      scene.add(hunterGroup);
-
-      buildDetailedHunter();
-
-      container.addEventListener('pointerdown', (e) => {
-        isDragging = true;
-        previousPointerX = e.clientX;
-      });
-
-      window.addEventListener('pointermove', (e) => {
-        if (!isDragging) return;
-        const deltaX = e.clientX - previousPointerX;
-        targetRotationY += deltaX * 0.015;
-        previousPointerX = e.clientX;
-      });
-
-      window.addEventListener('pointerup', () => { isDragging = false; });
-      window.addEventListener('pointercancel', () => { isDragging = false; });
-
-      window.addEventListener('resize', () => {
-        if (!container || !renderer || !camera) return;
-        const newW = container.clientWidth;
-        const newH = container.clientHeight;
-        camera.aspect = newW / newH;
-        camera.updateProjectionMatrix();
-        renderer.setSize(newW, newH);
-      });
-
-      animate3D();
-    }
-
-    function createBox(w, h, d, color, x = 0, y = 0, z = 0, emissive = 0x000000) {
-      const geo = new THREE.BoxGeometry(w, h, d);
-      const mat = new THREE.MeshStandardMaterial({
-        color: color,
-        roughness: 0.4,
-        metalness: 0.2,
-        emissive: emissive
-      });
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.position.set(x, y, z);
-      return mesh;
-    }
-
-    function buildDetailedHunter() {
-      // Piernas y Botas
-      const leftLeg = createBox(0.24, 0.75, 0.26, 0x1e293b, -0.2, 0.38, 0);
-      const rightLeg = createBox(0.24, 0.75, 0.26, 0x1e293b, 0.2, 0.38, 0);
-      const leftBoot = createBox(0.26, 0.28, 0.34, 0x090d16, -0.2, 0.14, 0.04);
-      const rightBoot = createBox(0.26, 0.28, 0.34, 0x090d16, 0.2, 0.14, 0.04);
-      hunterGroup.add(leftLeg, rightLeg, leftBoot, rightBoot);
-
-      // Torso & Cinturón
-      const torso = createBox(0.68, 0.88, 0.4, 0x0f172a, 0, 1.15, 0);
-      const belt = createBox(0.72, 0.12, 0.44, 0x020617, 0, 0.78, 0);
-      const buckle = createBox(0.18, 0.14, 0.46, 0x64748b, 0, 0.78, 0);
-      hunterGroup.add(torso, belt, buckle);
-
-      // Brazos
-      const leftArm = createBox(0.2, 0.75, 0.22, 0x1e293b, -0.48, 1.1, 0);
-      const rightArm = createBox(0.2, 0.75, 0.22, 0x1e293b, 0.48, 1.1, 0);
-      const leftGlove = createBox(0.22, 0.24, 0.24, 0x020617, -0.48, 0.82, 0);
-      const rightGlove = createBox(0.22, 0.24, 0.24, 0x020617, 0.48, 0.82, 0);
-      hunterGroup.add(leftArm, rightArm, leftGlove, rightGlove);
-
-      // Cabeza & Cabello
-      const neck = createBox(0.22, 0.15, 0.22, 0xfecba6, 0, 1.62, 0);
-      const head = createBox(0.5, 0.52, 0.46, 0xfecba6, 0, 1.9, 0);
-      hunterGroup.add(neck, head);
-
-      const hairTop = createBox(0.56, 0.2, 0.52, 0x020617, 0, 2.2, 0);
-      const hairBack = createBox(0.54, 0.5, 0.16, 0x020617, 0, 1.95, -0.22);
-      const hairBangs = createBox(0.54, 0.18, 0.14, 0x020617, 0, 2.05, 0.22);
-      const bangSideL = createBox(0.12, 0.32, 0.12, 0x020617, -0.24, 1.9, 0.22);
-      const bangSideR = createBox(0.12, 0.32, 0.12, 0x020617, 0.24, 1.9, 0.22);
-      hunterGroup.add(hairTop, hairBack, hairBangs, bangSideL, bangSideR);
-
-      // Ojos
-      const eyeGeo = new THREE.BoxGeometry(0.08, 0.06, 0.04);
-      const eyeMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
-      const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
-      leftEye.position.set(-0.14, 1.88, 0.24);
-      const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
-      rightEye.position.set(0.14, 1.88, 0.24);
-      hunterGroup.add(leftEye, rightEye);
-      gearObjects.leftEyeMat = eyeMat;
-      gearObjects.rightEyeMat = eyeMat;
-
-      // Daga Derecha (Nivel 5+)
-      const daggerR = new THREE.Group();
-      const hiltR = createBox(0.06, 0.2, 0.06, 0x78350f, 0, 0, 0);
-      const guardR = createBox(0.18, 0.04, 0.08, 0xd97706, 0, 0.12, 0);
-      const bladeR = createBox(0.08, 0.5, 0.04, 0xe2e8f0, 0, 0.38, 0, 0x38bdf8);
-      daggerR.add(hiltR, guardR, bladeR);
-      daggerR.position.set(0.52, 0.72, 0.25);
-      daggerR.rotation.x = Math.PI / 4;
-      hunterGroup.add(daggerR);
-      gearObjects.daggerR = daggerR;
-
-      // Daga Izquierda (Nivel 10+)
-      const daggerL = new THREE.Group();
-      const hiltL = createBox(0.06, 0.2, 0.06, 0x78350f, 0, 0, 0);
-      const guardL = createBox(0.18, 0.04, 0.08, 0xd97706, 0, 0.12, 0);
-      const bladeL = createBox(0.08, 0.5, 0.04, 0xe2e8f0, 0, 0.38, 0, 0x38bdf8);
-      daggerL.add(hiltL, guardL, bladeL);
-      daggerL.position.set(-0.52, 0.72, 0.25);
-      daggerL.rotation.x = Math.PI / 4;
-      hunterGroup.add(daggerL);
-      gearObjects.daggerL = daggerL;
-
-      // Capa (Nivel 10+)
-      const capeGroup = new THREE.Group();
-      const capeTop = createBox(0.8, 0.1, 0.5, 0x1e1b4b, 0, 1.55, 0);
-      const capeBackMesh = createBox(0.74, 1.1, 0.08, 0x312e81, 0, 0.95, -0.26);
-      const shoulderL = createBox(0.28, 0.15, 0.3, 0x1e1b4b, -0.5, 1.52, 0);
-      const shoulderR = createBox(0.28, 0.15, 0.3, 0x1e1b4b, 0.5, 1.52, 0);
-      capeGroup.add(capeTop, capeBackMesh, shoulderL, shoulderR);
-      hunterGroup.add(capeGroup);
-      gearObjects.cape = capeGroup;
-
-      // Armadura (Nivel 20+)
-      const armorGroup = new THREE.Group();
-      const chestPlate = createBox(0.72, 0.6, 0.44, 0x334155, 0, 1.25, 0.02);
-      const runeLight = createBox(0.14, 0.36, 0.46, 0x00f0ff, 0, 1.28, 0.03, 0x00f0ff);
-      armorGroup.add(chestPlate, runeLight);
-      hunterGroup.add(armorGroup);
-      gearObjects.armor = armorGroup;
-
-      // Aura (Nivel 30+)
-      const auraGroup = new THREE.Group();
-      const particleCount = 28;
-      const partGeo = new THREE.BoxGeometry(0.08, 0.08, 0.08);
-      const partMat = new THREE.MeshBasicMaterial({ color: 0xc084fc });
-      for (let i = 0; i < particleCount; i++) {
-        const p = new THREE.Mesh(partGeo, partMat);
-        const radius = 0.8 + Math.random() * 0.4;
-        const angle = (i / particleCount) * Math.PI * 2;
-        p.position.set(Math.cos(angle) * radius, 0.3 + Math.random() * 1.6, Math.sin(angle) * radius);
-        auraGroup.add(p);
-      }
-      hunterGroup.add(auraGroup);
-      gearObjects.aura = auraGroup;
-    }
-
-    function animate3D() {
-      requestAnimationFrame(animate3D);
-
-      hunterGroup.rotation.y += (targetRotationY - hunterGroup.rotation.y) * 0.1;
-      if (!isDragging) targetRotationY += 0.003;
-
-      const time = performance.now() * 0.0025;
-      hunterGroup.position.y = -0.5 + Math.sin(time) * 0.05;
-
-      if (gearObjects.aura && gearObjects.aura.visible) {
-        gearObjects.aura.rotation.y -= 0.025;
-      }
-
-      renderer.render(scene, camera);
-    }
-
-    function updateAvatarVisuals() {
-      if (!gearObjects.daggerR) return;
-
-      const lvl = playerData.level;
-      const titleEl = document.getElementById('avatar-title');
-      const equipEl = document.getElementById('avatar-equipment-label');
-      const nextGearEl = document.getElementById('next-gear-text');
-
-      if (lvl < 5) {
-        titleEl.innerText = "Rango E - Novato";
-        equipEl.innerText = "Atuendo Táctico Básico";
-        nextGearEl.innerText = "Nivel 5: Desbloquear Daga de Acero y Brillo Ocular";
-        gearObjects.leftEyeMat.color.setHex(0x0f172a);
-        gearObjects.rightEyeMat.color.setHex(0x0f172a);
-        gearObjects.daggerR.visible = false;
-        gearObjects.daggerL.visible = false;
-        gearObjects.cape.visible = false;
-        gearObjects.armor.visible = false;
-        gearObjects.aura.visible = false;
-      } else if (lvl < 10) {
-        titleEl.innerText = "Rango D - Cazador Despertado";
-        equipEl.innerText = "Daga de Acero & Ojos Neón";
-        nextGearEl.innerText = "Nivel 10: Desbloquear Capa de Asalto & Dagas Gemelas";
-        gearObjects.leftEyeMat.color.setHex(0x00f0ff);
-        gearObjects.rightEyeMat.color.setHex(0x00f0ff);
-        gearObjects.daggerR.visible = true;
-        gearObjects.daggerL.visible = false;
-        gearObjects.cape.visible = false;
-        gearObjects.armor.visible = false;
-        gearObjects.aura.visible = false;
-      } else if (lvl < 20) {
-        titleEl.innerText = "Rango C - Asesino de Mazmorras";
-        equipEl.innerText = "Dagas Gemelas & Capa de Batalla";
-        nextGearEl.innerText = "Nivel 20: Desbloquear Armadura de Placas Rúnica";
-        gearObjects.leftEyeMat.color.setHex(0x00f0ff);
-        gearObjects.rightEyeMat.color.setHex(0x00f0ff);
-        gearObjects.daggerR.visible = true;
-        gearObjects.daggerL.visible = true;
-        gearObjects.cape.visible = true;
-        gearObjects.armor.visible = false;
-        gearObjects.aura.visible = false;
-      } else if (lvl < 30) {
-        titleEl.innerText = "Rango B - Cazador de Élite";
-        equipEl.innerText = "Armadura Rúnica & Capa de Asalto";
-        nextGearEl.innerText = "Nivel 30: Despertar Aura del Monarca de las Sombras";
-        gearObjects.leftEyeMat.color.setHex(0x38bdf8);
-        gearObjects.rightEyeMat.color.setHex(0x38bdf8);
-        gearObjects.daggerR.visible = true;
-        gearObjects.daggerL.visible = true;
-        gearObjects.cape.visible = true;
-        gearObjects.armor.visible = true;
-        gearObjects.aura.visible = false;
-      } else {
-        titleEl.innerText = lvl >= 40 ? "Rango S - Monarca de las Sombras" : "Rango A - Comandante Sombrío";
-        equipEl.innerText = "Armadura Completa & Aura Espectral";
-        nextGearEl.innerText = "¡MÁXIMA FORMA ALCANZADA! Sigue fortaleciéndote.";
-        gearObjects.leftEyeMat.color.setHex(0xc084fc);
-        gearObjects.rightEyeMat.color.setHex(0xc084fc);
-        gearObjects.daggerR.visible = true;
-        gearObjects.daggerL.visible = true;
-        gearObjects.cape.visible = true;
-        gearObjects.armor.visible = true;
-        gearObjects.aura.visible = true;
-      }
-    }
-
-    const statBadges = {
-      str: { text: '+1 STR', class: 'bg-red-950/80 border-red-500/60 text-red-300' },
-      agi: { text: '+1 AGI', class: 'bg-emerald-950/80 border-emerald-500/60 text-emerald-300' },
-      int: { text: '+1 INT', class: 'bg-blue-950/80 border-blue-500/60 text-blue-300' },
-      vit: { text: '+1 VIT', class: 'bg-amber-950/80 border-amber-500/60 text-amber-300' }
-    };
-
+    const statBadges = { str: { t: '+STR', c: 'bg-red-950/80 border-red-500/60 text-red-300' }, agi: { t: '+AGI', c: 'bg-emerald-950/80 border-emerald-500/60 text-emerald-300' }, int: { t: '+INT', c: 'bg-purple-950/80 border-purple-500/60 text-purple-300' }, vit: { t: '+VIT', c: 'bg-amber-950/80 border-amber-500/60 text-amber-300' } };
+    
     function updateScreen() {
-      document.getElementById('player-level').innerText = playerData.level;
-      document.getElementById('player-rank').innerText = playerData.rank;
-      document.getElementById('streak-counter').innerText = `${playerData.streak} días 🔥`;
-      document.getElementById('player-gold').innerText = `🪙 ${playerData.gold || 0}`;
-      document.getElementById('stat-points').innerText = playerData.availablePoints;
-
-      document.getElementById('stat-str').innerText = playerData.stats.str;
-      document.getElementById('stat-agi').innerText = playerData.stats.agi;
-      document.getElementById('stat-int').innerText = playerData.stats.int;
-      document.getElementById('stat-vit').innerText = playerData.stats.vit;
-
-      // Barras de HP y MP
-      document.getElementById('hp-text').innerText = `${playerData.hp} / ${playerData.maxHp}`;
-      document.getElementById('hp-bar').style.width = `${(playerData.hp / playerData.maxHp) * 100}%`;
-      document.getElementById('mp-text').innerText = `${playerData.mp} / ${playerData.maxMp}`;
-      document.getElementById('mp-bar').style.width = `${(playerData.mp / playerData.maxMp) * 100}%`;
-
-      // Barra de EXP
-      document.getElementById('xp-text').innerText = `${playerData.xp} / ${playerData.xpNeeded}`;
-      const xpPercent = Math.min(100, Math.floor((playerData.xp / playerData.xpNeeded) * 100));
-      document.getElementById('xp-bar').style.width = `${xpPercent}%`;
-
-      updateAvatarVisuals();
-
-      // Renderizar Inventario
-      const invGrid = document.getElementById('inventory-grid');
-      invGrid.innerHTML = '';
-      if (!playerData.inventory || playerData.inventory.length === 0) {
-        invGrid.innerHTML = `<span class="col-span-4 text-[9px] text-cyan-600/70 py-1">Vacío. Abre cajas para obtener botín.</span>`;
-      } else {
-        playerData.inventory.forEach(item => {
-          const slot = document.createElement('div');
-          slot.className = "p-1 rounded bg-slate-900 border border-cyan-800/50 flex flex-col items-center justify-between text-center hover:border-cyan-400 transition-all cursor-pointer";
-          slot.onclick = () => useItem(item.id);
-          slot.title = `${item.name}: ${item.desc} (Haz clic para usar)`;
-          slot.innerHTML = `
-            <span class="text-base">${item.icon}</span>
-            <span class="text-[9px] font-bold text-cyan-300">x${item.count}</span>
-          `;
-          invGrid.appendChild(slot);
-        });
-      }
-
-      // Renderizar Misiones
-      const questsContainer = document.getElementById('quests-container');
-      questsContainer.innerHTML = '';
-
-      if (playerData.quests.length === 0) {
-        questsContainer.innerHTML = `
-          <div class="text-center py-6 text-xs text-cyan-600/70">
-            No hay misiones asignadas por El Sistema.
+      document.getElementById('player-level').innerText = playerData.level; document.getElementById('player-rank').innerText = playerData.rank || 'E'; document.getElementById('streak-counter').innerText = `${playerData.streak || 0} 🔥`; document.getElementById('player-gold').innerText = playerData.gold || 0; document.getElementById('stat-points').innerText = playerData.availablePoints;
+      ['str','agi','int','vit'].forEach(s => document.getElementById(`stat-${s}`).innerText = playerData.stats[s]);
+      document.getElementById('hp-text').innerText = `${playerData.hp} / ${playerData.maxHp}`; document.getElementById('hp-bar').style.width = `${(playerData.hp / playerData.maxHp) * 100}%`;
+      document.getElementById('xp-text').innerText = `${playerData.xp} / ${playerData.xpNeeded}`; document.getElementById('xp-bar').style.width = `${Math.min(100, Math.floor((playerData.xp / playerData.xpNeeded) * 100))}%`;
+      
+      const invG = document.getElementById('inventory-grid'); invG.innerHTML = '';
+      playerData.inventory.forEach(i => { const d = document.createElement('div'); d.className = "bg-black/60 border border-cyan-800/80 p-2.5 flex flex-col items-center rounded-lg cursor-pointer hover:border-cyan-400 hover:bg-cyan-950/40 transition-colors shadow-inner relative"; d.onclick = () => useItem(i.id); d.innerHTML = `<span class="text-3xl drop-shadow-md mb-1">${i.icon}</span><span class="absolute bottom-0 right-1 text-[10px] font-extrabold text-cyan-200 bg-black/80 px-1 rounded-tl">x${i.count}</span>`; invG.appendChild(d); });
+      
+      const qC = document.getElementById('quests-container'); qC.innerHTML = '';
+      if(playerData.quests.length === 0) qC.innerHTML = `<div class="text-center py-6 text-sm text-cyan-600/70 font-bold uppercase tracking-widest">No hay misiones activas</div>`;
+      playerData.quests.forEach(q => { 
+        const d = document.createElement('div'); d.className = `group flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-colors shadow-sm ${q.done ? 'bg-emerald-950/20 border-emerald-500/50 text-emerald-400/70' : 'bg-black/40 border-cyan-900/50 text-cyan-100 hover:border-cyan-400 hover:bg-cyan-950/30'}`; d.onclick = () => toggleQuest(q.id); 
+        const b = statBadges[q.stat] ? `<span class="px-1.5 py-0.5 text-[9px] font-extrabold rounded border ${statBadges[q.stat].c} tracking-wider">${statBadges[q.stat].t}</span>` : ''; 
+        d.innerHTML = `
+          <div class="flex items-center gap-3">
+            <div class="w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-colors ${q.done?'border-emerald-400 bg-emerald-500 text-black shadow-[0_0_8px_rgba(16,185,129,0.6)]':'border-cyan-700 bg-black'} text-xs font-bold">${q.done?'✓':''}</div>
+            <div class="flex flex-col"><span class="text-sm font-semibold tracking-wide ${q.done?'line-through':''}">${q.title}</span><div class="flex gap-2 mt-0.5">${b}</div></div>
           </div>
-        `;
-        return;
-      }
-
-      playerData.quests.forEach(q => {
-        const item = document.createElement('div');
-        item.className = `group flex items-center justify-between p-2 rounded border transition-all cursor-pointer ${
-          q.done 
-            ? 'bg-emerald-950/30 border-emerald-500/50 text-emerald-300' 
-            : 'bg-slate-950/40 border-cyan-900/40 text-cyan-200 hover:border-cyan-500/40'
-        }`;
-        item.onclick = () => toggleQuest(q.id);
-
-        const badgeInfo = statBadges[q.stat];
-        const badgeHtml = badgeInfo 
-          ? `<span class="px-1.5 py-0.5 text-[9px] font-bold rounded border ${badgeInfo.class}">${badgeInfo.text}</span>` 
-          : '';
-
-        item.innerHTML = `
-          <div class="flex items-center gap-2 overflow-hidden pr-2">
-            <div class="w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${q.done ? 'border-emerald-400 bg-emerald-500 text-black font-bold' : 'border-cyan-600'} text-[9px]">
-              ${q.done ? '✓' : ''}
-            </div>
-            <span class="text-xs truncate ${q.done ? 'line-through opacity-70' : ''}">${q.title}</span>
-            ${badgeHtml}
-          </div>
-          <div class="flex items-center gap-2 shrink-0">
-            <span class="text-xs font-bold ${q.done ? 'text-emerald-400' : 'text-cyan-400'}">+${q.xp} EXP</span>
-            <button onclick="deleteQuest(${q.id}, event)" title="Eliminar misión" class="w-5 h-5 flex items-center justify-center text-slate-500 hover:text-red-400 hover:bg-red-950/40 rounded transition-all text-xs opacity-60 hover:opacity-100">
-              ✕
-            </button>
-          </div>
-        `;
-        questsContainer.appendChild(item);
+          <div class="flex items-center gap-3">
+            <span class="text-xs font-extrabold tracking-wider ${q.done?'text-emerald-500':'text-cyan-500'}">+${q.xp} XP</span>
+            <button onclick="deleteQuest(${q.id}, event)" class="w-6 h-6 flex items-center justify-center bg-black/50 border border-slate-800 rounded text-slate-500 hover:text-red-400 hover:border-red-500/50 transition-all text-sm font-bold">✕</button>
+          </div>`; 
+        qC.appendChild(d); 
       });
+      updateMainAvatarVisuals();
     }
 
-    window.addEventListener('DOMContentLoaded', () => {
-      init3D();
-      updateScreen();
+    // --- MOTOR 3D PRINCIPAL (MENU AVATAR CON ANIMACIÓN DE RESPIRACIÓN) ---
+    let scene, camera, renderer, hunterGroup, gearObjects = {}, isDragging = false, prevX = 0, targetY = 0;
+    function initMain3D() {
+      const cnt = document.getElementById('avatar-container'); scene = new THREE.Scene(); camera = new THREE.PerspectiveCamera(35, cnt.clientWidth / cnt.clientHeight, 0.1, 1000); camera.position.set(0, 1.4, 6.5);
+      renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true }); renderer.setSize(cnt.clientWidth, cnt.clientHeight); cnt.appendChild(renderer.domElement);
+      scene.add(new THREE.AmbientLight(0xdbeafe, 0.8)); const dl = new THREE.DirectionalLight(0x00f0ff, 1.5); dl.position.set(4, 8, 5); scene.add(dl); scene.add(new THREE.PointLight(0xa855f7, 2, 10).position.set(-3, 2, -4));
+      
+      hunterGroup = new THREE.Group(); hunterGroup.position.y = -0.5; scene.add(hunterGroup);
+      
+      // Sombra base
+      const shadowPlane = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.5), new THREE.MeshBasicMaterial({color: 0x000000, transparent: true, opacity: 0.4}));
+      shadowPlane.rotation.x = -Math.PI/2; shadowPlane.position.y = -0.05; scene.add(shadowPlane);
+
+      const cBox = (w,h,d,c,x=0,y=0,z=0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshStandardMaterial({color:c, roughness:0.4, metalness:0.3})); m.position.set(x,y,z); return m; };
+      hunterGroup.add(cBox(0.24,0.75,0.26,0x1e293b,-0.2,0.38,0), cBox(0.24,0.75,0.26,0x1e293b,0.2,0.38,0), cBox(0.26,0.28,0.34,0x090d16,-0.2,0.14,0.04), cBox(0.26,0.28,0.34,0x090d16,0.2,0.14,0.04), cBox(0.68,0.88,0.4,0x0f172a,0,1.15,0), cBox(0.72,0.12,0.44,0x020617,0,0.78,0), cBox(0.18,0.14,0.46,0x64748b,0,0.78,0), cBox(0.2,0.75,0.22,0x1e293b,-0.48,1.1,0), cBox(0.2,0.75,0.22,0x1e293b,0.48,1.1,0), cBox(0.22,0.24,0.24,0x020617,-0.48,0.82,0), cBox(0.22,0.24,0.24,0x020617,0.48,0.82,0), cBox(0.22,0.15,0.22,0xfecba6,0,1.62,0), cBox(0.45,0.48,0.45,0xfecba6,0,1.9,0), cBox(0.5,0.15,0.5,0x020617,0,2.15,0), cBox(0.5,0.4,0.15,0x020617,0,1.95,-0.22));
+      const eM = new THREE.MeshBasicMaterial({color:0x0f172a}); gearObjects.eL = new THREE.Mesh(new THREE.BoxGeometry(0.08,0.06,0.04),eM); gearObjects.eL.position.set(-0.12,1.88,0.23); gearObjects.eR = new THREE.Mesh(new THREE.BoxGeometry(0.08,0.06,0.04),eM); gearObjects.eR.position.set(0.12,1.88,0.23); hunterGroup.add(gearObjects.eL, gearObjects.eR); gearObjects.eMat = eM;
+      gearObjects.dR = new THREE.Group(); gearObjects.dR.add(cBox(0.06,0.2,0.06,0x78350f), cBox(0.18,0.04,0.08,0xd97706,0,0.12,0), cBox(0.08,0.5,0.04,0xe2e8f0,0,0.38,0)); gearObjects.dR.position.set(0.52,0.72,0.25); gearObjects.dR.rotation.x=Math.PI/4; hunterGroup.add(gearObjects.dR);
+      gearObjects.dL = new THREE.Group(); gearObjects.dL.add(cBox(0.06,0.2,0.06,0x78350f), cBox(0.18,0.04,0.08,0xd97706,0,0.12,0), cBox(0.08,0.5,0.04,0xe2e8f0,0,0.38,0)); gearObjects.dL.position.set(-0.52,0.72,0.25); gearObjects.dL.rotation.x=Math.PI/4; hunterGroup.add(gearObjects.dL);
+      gearObjects.c = new THREE.Group(); gearObjects.c.add(cBox(0.8,0.1,0.5,0x1e1b4b,0,1.55,0), cBox(0.74,1.1,0.08,0x312e81,0,0.95,-0.26), cBox(0.28,0.15,0.3,0x1e1b4b,-0.5,1.52,0), cBox(0.28,0.15,0.3,0x1e1b4b,0.5,1.52,0)); hunterGroup.add(gearObjects.c);
+      gearObjects.a = new THREE.Group(); gearObjects.a.add(cBox(0.72,0.6,0.44,0x334155,0,1.25,0.02), cBox(0.14,0.36,0.46,0x00f0ff,0,1.28,0.03)); hunterGroup.add(gearObjects.a);
+      gearObjects.au = new THREE.Group(); for(let i=0;i<30;i++){const p=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.06,0.06),new THREE.MeshBasicMaterial({color:0xc084fc})); const r=0.8+Math.random()*0.5,a=(i/30)*Math.PI*2; p.position.set(Math.cos(a)*r,0.2+Math.random()*1.8,Math.sin(a)*r); gearObjects.au.add(p);} hunterGroup.add(gearObjects.au);
+      
+      cnt.addEventListener('pointerdown', e => { isDragging = true; prevX = e.clientX; }); window.addEventListener('pointermove', e => { if(isDragging){ targetY += (e.clientX - prevX)*0.012; prevX = e.clientX; }}); window.addEventListener('pointerup', () => isDragging = false); window.addEventListener('pointerleave', () => isDragging = false);
+      
+      const anim = () => { requestAnimationFrame(anim); hunterGroup.rotation.y += (targetY - hunterGroup.rotation.y) * 0.1; if(!isDragging) targetY += 0.005; hunterGroup.position.y = -0.5 + Math.sin(performance.now()*0.002)*0.06; if(gearObjects.au.visible) gearObjects.au.rotation.y-=0.02; renderer.render(scene, camera); }
+      anim();
+    }
+    function updateMainAvatarVisuals() {
+      if(!gearObjects.dR) return;
+      const l = playerData.level, t = document.getElementById('avatar-title'), e = document.getElementById('avatar-equipment-label');
+      const sV = (C,d,c,a,au) => { gearObjects.eMat.color.setHex(C); gearObjects.dR.visible=d; gearObjects.dL.visible=d; gearObjects.c.visible=c; gearObjects.a.visible=a; gearObjects.au.visible=au; };
+      if(l<5){ t.innerText="Rango E - Novato"; e.innerText="Atuendo Básico"; sV(0x0f172a,0,0,0,0); } else if(l<10){ t.innerText="Rango D - Despertado"; e.innerText="Dagas & Ojos Neón"; sV(0x00f0ff,1,0,0,0); } else if(l<20){ t.innerText="Rango C - Asesino"; e.innerText="Capa & Dagas"; sV(0x00f0ff,1,1,0,0); } else if(l<30){ t.innerText="Rango B - Élite"; e.innerText="Armadura Rúnica"; sV(0x38bdf8,1,1,1,0); } else { t.innerText="Rango A/S - Monarca"; e.innerText="Aura Espectral"; sV(0xc084fc,1,1,1,1); }
+    }
+
+    // --- EFECTOS DE SONIDO RETRO (SFX) ---
+    const actx = new (window.AudioContext || window.webkitAudioContext)();
+    function pTone(f, d, t='sine') { try { if(actx.state==='suspended') actx.resume(); const o=actx.createOscillator(), g=actx.createGain(); o.type=t; o.frequency.setValueAtTime(f, actx.currentTime); g.gain.setValueAtTime(0.1, actx.currentTime); g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime+d); o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime+d); } catch(e){} }
+    function sfxSwing() { pTone(400, 0.1, 'sine'); pTone(200, 0.15, 'sine'); }
+    function sfxHit() { pTone(150, 0.1, 'square'); setTimeout(()=>pTone(100, 0.1, 'sawtooth'), 50); }
+    function sfxEnemyDie() { pTone(300, 0.1, 'sawtooth'); setTimeout(()=>pTone(150, 0.2, 'sawtooth'), 100); }
+    function sfxBossSpawn() { [100, 80, 60, 50].forEach((f, i) => setTimeout(() => pTone(f, 0.5, 'sawtooth'), i * 200)); }
+
+    // --- MOTOR ACTION RPG: ESTILO "BINDING OF ISAAC" ---
+    let cScene, cCam, cRen, pVox;
+    let enemies = []; let dungeonPhase = 'minions'; let bossMaxHp = 0, arpgActive = false; let attackCooldown = 0;
+    
+    const keys = { w:false, a:false, s:false, d:false, space:false };
+    window.addEventListener('keydown', (e) => { if(!arpgActive) return; if(e.key==='w'||e.key==='ArrowUp') keys.w=true; if(e.key==='s'||e.key==='ArrowDown') keys.s=true; if(e.key==='a'||e.key==='ArrowLeft') keys.a=true; if(e.key==='d'||e.key==='ArrowRight') keys.d=true; if(e.key===' ') {keys.space=true; e.preventDefault();} });
+    window.addEventListener('keyup', (e) => { if(!arpgActive) return; if(e.key==='w'||e.key==='ArrowUp') keys.w=false; if(e.key==='s'||e.key==='ArrowDown') keys.s=false; if(e.key==='a'||e.key==='ArrowLeft') keys.a=false; if(e.key==='d'||e.key==='ArrowRight') keys.d=false; if(e.key===' ') keys.space=false; });
+
+    const bindTouch = (id, keyTarget) => {
+      const el = document.getElementById(id); if(!el) return;
+      el.addEventListener('touchstart', (e)=>{ e.preventDefault(); keys[keyTarget] = true; el.style.background = 'rgba(168,85,247,0.6)'; });
+      el.addEventListener('touchend', (e)=>{ e.preventDefault(); keys[keyTarget] = false; el.style.background = 'rgba(255,255,255,0.05)'; });
+    };
+
+    function startDungeon() { document.getElementById('dungeon-modal').classList.remove('hidden'); setTimeout(initARPG, 150); }
+
+    function initARPG() {
+      const cnt = document.getElementById('combat-canvas-container'); cnt.innerHTML = ''; 
+      document.getElementById('dungeon-player-hp-bar').style.width = `${(playerData.hp/playerData.maxHp)*100}%`;
+      document.getElementById('enemy-label').innerText = "Fase 1: Duendes";
+      document.getElementById('combat-log').innerHTML = `<p class="text-purple-400">> Entras a la Sala. Mátalos a todos.</p>`;
+      
+      arpgActive = true; dungeonPhase = 'minions'; enemies = []; bossMaxHp = 200 + (playerData.level * 50);
+
+      cScene = new THREE.Scene();
+      const aspect = cnt.clientWidth / cnt.clientHeight; 
+      cCam = new THREE.PerspectiveCamera(55, aspect, 0.1, 100); cCam.position.set(0, 14, 10); cCam.lookAt(0, 0, 0); 
+      
+      cRen = new THREE.WebGLRenderer({ alpha: true, antialias: true }); cRen.setSize(cnt.clientWidth, cnt.clientHeight); cnt.appendChild(cRen.domElement);
+      cScene.add(new THREE.AmbientLight(0x222244, 1.5)); const dl = new THREE.DirectionalLight(0xffffff, 1.2); dl.position.set(-5,15,-5); cScene.add(dl);
+      
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(20, 16), new THREE.MeshStandardMaterial({color: 0x1e1b4b, roughness: 0.8})); floor.rotation.x = -Math.PI/2; cScene.add(floor);
+      const wallMat = new THREE.MeshStandardMaterial({color: 0x2e1065});
+      const wN = new THREE.Mesh(new THREE.BoxGeometry(20, 2, 1), wallMat); wN.position.set(0, 1, -8.5); cScene.add(wN);
+      const wS = new THREE.Mesh(new THREE.BoxGeometry(20, 2, 1), wallMat); wS.position.set(0, 1, 8.5); cScene.add(wS);
+      const wE = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 16), wallMat); wE.position.set(10.5, 1, 0); cScene.add(wE);
+      const wW = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 16), wallMat); wW.position.set(-10.5, 1, 0); cScene.add(wW);
+
+      pVox = new THREE.Group();
+      pVox.add(new THREE.Mesh(new THREE.BoxGeometry(0.8, 1, 0.8), new THREE.MeshStandardMaterial({color: 0x38bdf8})));
+      const wpn = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.5, 0.2), new THREE.MeshStandardMaterial({color: 0xffffff, emissive: 0x00ffff})); wpn.position.set(0.6, 0.2, 0.4); wpn.rotation.x = Math.PI/2; pVox.add(wpn);
+      pVox.position.set(0, 0.5, 5); cScene.add(pVox); 
+
+      for(let i=0; i<3; i++) {
+        const gob = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), new THREE.MeshStandardMaterial({color: 0x22c55e}));
+        gob.position.set((Math.random()-0.5)*16, 0.4, (Math.random()-0.5)*10 - 2); 
+        cScene.add(gob); enemies.push({ id: i, type: 'minion', vox: gob, hp: 40, maxHp: 40, atkCd: 0, speed: 0.03, dmg: 5 });
+      }
+      updateEnemyBar();
+
+      bindTouch('btn-up', 'w'); bindTouch('btn-down', 's'); bindTouch('btn-left', 'a'); bindTouch('btn-right', 'd');
+      const atkBtn = document.getElementById('btn-action-attack'); atkBtn.addEventListener('touchstart', (e)=>{ e.preventDefault(); keys.space = true; atkBtn.style.transform = 'scale(0.85)'; }); atkBtn.addEventListener('touchend', (e)=>{ e.preventDefault(); keys.space = false; atkBtn.style.transform = 'scale(1)'; });
+
+      gameLoop();
+    }
+
+    function addLog(msg, color) { const l = document.getElementById('combat-log'); l.innerHTML += `<p class="text-${color}">> ${msg}</p>`; l.scrollTop = l.scrollHeight; }
+    function updateEnemyBar() { const bar = document.getElementById('dungeon-boss-hp-bar'); if (dungeonPhase === 'minions') { bar.style.width = `${(enemies.length / 3) * 100}%`; } else if (enemies.length > 0) { bar.style.width = `${(enemies[0].hp / enemies[0].maxHp) * 100}%`; } }
+
+    function spawnBoss() {
+      addLog("¡EL LOBO ALFA HA APARECIDO!", "red-500 font-bold"); sfxBossSpawn(); document.getElementById('enemy-label').innerText = "Jefe: Lobo Alfa";
+      const bGrp = new THREE.Group(); bGrp.add(new THREE.Mesh(new THREE.BoxGeometry(1.5, 1, 2.5), new THREE.MeshStandardMaterial({color: 0x111111}))); const bHead = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({color: 0x222222})); bHead.position.set(0, 0.8, -1.5); bGrp.add(bHead);
+      bGrp.position.set(0, 0.5, -4); cScene.add(bGrp);
+      enemies.push({ id: 'boss', type: 'boss', vox: bGrp, hp: bossMaxHp, maxHp: bossMaxHp, atkCd: 60, speed: 0.045, dmg: 15 + playerData.level }); updateEnemyBar();
+    }
+
+    function gameLoop() {
+      if(!arpgActive) return; requestAnimationFrame(gameLoop);
+      let speed = 0.06 + (playerData.stats.agi * 0.002); let moveX = 0, moveZ = 0;
+      if(keys.w) moveZ -= 1; if(keys.s) moveZ += 1; if(keys.a) moveX -= 1; if(keys.d) moveX += 1;
+
+      if(moveX !== 0 || moveZ !== 0) { const length = Math.sqrt(moveX*moveX + moveZ*moveZ); pVox.position.x += (moveX/length) * speed; pVox.position.z += (moveZ/length) * speed; const angle = Math.atan2(moveX, moveZ); pVox.rotation.y = angle; }
+      pVox.position.x = Math.max(-9.5, Math.min(9.5, pVox.position.x)); pVox.position.z = Math.max(-7.5, Math.min(7.5, pVox.position.z));
+      
+      if(attackCooldown > 0) attackCooldown--;
+      if(keys.space && attackCooldown <= 0) {
+        attackCooldown = 25; sfxSwing(); pVox.children[1].position.z -= 0.5; setTimeout(()=> { if(pVox && pVox.children[1]) pVox.children[1].position.z += 0.5; }, 150);
+        let closest = null, minDist = 3.0;
+        enemies.forEach(e => { let d = pVox.position.distanceTo(e.vox.position); if(d < minDist) { minDist = d; closest = e; } });
+
+        if(closest) {
+          sfxHit(); let dmg = Math.floor(playerData.stats.str * 1.5) + Math.floor(Math.random()*5); if(Math.random()*100 < playerData.stats.agi) { dmg *= 2; addLog(`¡CRÍTICO! ${dmg} daño`, "yellow-400"); }
+          closest.hp -= dmg;
+          const knockbackDir = closest.vox.position.clone().sub(pVox.position).normalize(); closest.vox.position.add(knockbackDir.multiplyScalar(0.5)); closest.vox.position.y += 0.3; setTimeout(() => { if(closest.vox) closest.vox.position.y -= 0.3; }, 100);
+          if(closest.hp <= 0) { sfxEnemyDie(); cScene.remove(closest.vox); enemies = enemies.filter(e => e.id !== closest.id); addLog(`Has matado a un ${closest.type==='minion'?'Duende':'Lobo'}`, "cyan-300"); } updateEnemyBar();
+        }
+      }
+
+      enemies.forEach(e => {
+        let d = pVox.position.distanceTo(e.vox.position); e.vox.lookAt(pVox.position);
+        if (d > 1.8) { e.vox.translateZ(e.speed); } else if (e.atkCd <= 0) {
+          e.atkCd = 80; e.vox.position.y += 0.4; setTimeout(()=> { if(e.vox) e.vox.position.y -= 0.4; }, 150);
+          let dmgR = Math.max(1, e.dmg - Math.floor(playerData.stats.vit * 0.4)); playerData.hp = Math.max(0, playerData.hp - dmgR); document.getElementById('dungeon-player-hp-bar').style.width = `${(playerData.hp/playerData.maxHp)*100}%`; addLog(`El ${e.type==='minion'?'Duende':'Jefe'} ataca: -${dmgR} HP`, "red-400");
+          if(playerData.hp <= 0) { addLog("HAS SIDO DERROTADO", "red-600 font-bold"); setTimeout(fleeDungeon, 2000); }
+        }
+        if(e.atkCd > 0) e.atkCd--;
+        e.vox.position.x = Math.max(-9.5, Math.min(9.5, e.vox.position.x)); e.vox.position.z = Math.max(-7.5, Math.min(7.5, e.vox.position.z));
+      });
+
+      if(enemies.length === 0 && dungeonPhase === 'minions') { dungeonPhase = 'boss'; setTimeout(spawnBoss, 1000); } else if (enemies.length === 0 && dungeonPhase === 'boss') { winARPG(); }
+      cRen.render(cScene, cCam);
+    }
+
+    function winARPG() { arpgActive = false; const xg = 150 + (playerData.level*20); playerData.xp += xg; playerData.gold += 200; sysAlert("¡MAZMORRA DESPEJADA!\n\nHas aniquilado al Jefe.", "[ VICTORIA ]", "yellow"); setTimeout(() => { document.getElementById('dungeon-modal').classList.add('hidden'); checkLevelUp(); save(); }, 2000); }
+    function fleeDungeon() { arpgActive = false; document.getElementById('dungeon-modal').classList.add('hidden'); save(); }
+
+    window.addEventListener('DOMContentLoaded', () => { 
+      initMain3D(); 
+      checkSystemDate(); 
+      updateScreen(); 
     });
   </script>
 </body>
